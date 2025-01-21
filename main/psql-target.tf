@@ -15,8 +15,8 @@ resource "sdm_resource" "rds-psql-target" {
         name     = "postgresql-target"
         hostname = one(module.psql-target[*].target_hostname)
         port     = one(module.psql-target[*].target_port)
-        username = "${one(module.psql-target[*].secret_arn)}?username"
-        password = "${one(module.psql-target[*].secret_arn)}?password"
+        username = "${one(module.psql-target[*].secret_arn)}?key=username"
+        password = "${one(module.psql-target[*].secret_arn)}?key=password"
         secret_store_id = sdm_secret_store.awssecretsmanager.id
         tags = one(module.psql-target[*].thistagset)
 
