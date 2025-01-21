@@ -43,7 +43,7 @@ The module will not verify if the right network configuration is set so make sur
 - Other Variables:
   - tagset: tags to apply to all resources
   - name: an arbitrary string that will be added to all resource names
-You can reference the terraform.tfvars.example file in the main module for reference
+You can reference the [terraform.tfvars.example](main/terraform.tfvars.example) file in the main module for reference
 
 ## Getting started
 

@@ -41,11 +41,11 @@ resource "aws_iam_policy" "secrets_manager_policy" {
         Effect   = "Allow"
         Action   = "secretsmanager:GetSecretValue"
         Resource = "*"
-#        Condition = {
-#          StringEquals = {
-#            "aws:RequestTag/Environment" = "sdmlab"  # Only allows reading secrets with this tag
-#          }
-#        }
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/${var.secretkey}" = "${var.secretvalue}"  # Only allows reading secrets with this tag
+          }
+        }
       }
     ]
   })

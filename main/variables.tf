@@ -79,3 +79,13 @@ variable "name" {
   description = "Arbitrary string to add to resources"
   type        = string
 }
+
+variable "secretkey" {
+  description = "Key for the tag used to filter secrets manager secrets"
+  type        = string
+}
+
+variable "secretvalue" {
+  description = "Value for the tag used to filter secrets manager secrets"
+  type        = string
+}

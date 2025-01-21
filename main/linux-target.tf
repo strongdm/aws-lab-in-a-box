@@ -7,7 +7,7 @@ module "linux-target" {
     tagset      = var.tagset
     name        = var.name
     subnet_id   = coalesce(var.relay_subnet,one(module.network[*].relay_subnet))
-    sg          = module.network[0].private_sg
+    sg          = coalesce(var.public_sg,module.network[0].private_sg)
 
 }
 

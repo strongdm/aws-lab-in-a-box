@@ -21,3 +21,7 @@ create_linux_target = true
 
 #Create an EKS Cluster Target
 #create_eks = true
+
+#Allow to access secrets with this key/value
+secretkey = "sdm-owner"
+secretvalue = "nico.corrarello@strongdm.com"
