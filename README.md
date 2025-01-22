@@ -2,6 +2,8 @@
 > [!CAUTION]
 > This is currently work in progress and could be broken at any time.
 > We will attempt to keep tagged versions "working"
+
+
 This repository contains a set of modules that enable the user to deploy a quick lab to evaluate StrongDM capabilities, including
 - An optional VPC, Subnet, Security Groups, NAT and Internet Gateway sets
 - A StrongDM Gateway and a relay with an instance profile allowing them to use AWS secrets manager
@@ -44,6 +46,8 @@ The module will not verify if the right network configuration is set so make sur
 - Other Variables:
   - tagset: tags to apply to all resources
   - name: an arbitrary string that will be added to all resource names
+
+
 You can reference the [terraform.tfvars.example](main/terraform.tfvars.example) file in the main module for reference
 
 ## Getting started
