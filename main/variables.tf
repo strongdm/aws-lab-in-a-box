@@ -89,3 +89,15 @@ variable "secretvalue" {
   description = "Value for the tag used to filter secrets manager secrets"
   type        = string
 }
+
+variable "create_aws_ro" {
+  description = "Create an access profile for StrongDM users in AWS with ReadOnly S3 Permissions"
+  type        = bool
+  default     = false
+}
+
+variable "create_s3_rw" {
+  description = "Create an access profile for StrongDM users in AWS with Full S3 Permissions"
+  type        = bool
+  default     = false
+}

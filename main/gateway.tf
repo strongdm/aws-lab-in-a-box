@@ -57,6 +57,7 @@ resource "aws_iam_role_policy_attachment" "attach_secrets_manager_policy" {
   policy_arn = aws_iam_policy.secrets_manager_policy.arn
 }
 
+
 # Instance Profile to attach to the EC2 instance
 resource "aws_iam_instance_profile" "gw_instance_profile" {
   name = "${var.name}-gateway-instance-profile"
