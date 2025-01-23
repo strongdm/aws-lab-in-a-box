@@ -40,8 +40,7 @@ if (((-not (Test-Path "C:\addssetup.done")) -and (Test-Path "C:\addsinstall.done
 
 if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done"))) {
         try {
-            $service = Get-Service -Name "CertSvc"
-            if (-not ($service.Status -eq "Running")) {
+            if (-not Get-Service -Name "CertSvc") {
                 while (Get-ADDomain) {
                     "[DCInstall] Starting Installation of CA"
                     Install-WindowsFeature ADCS-Cert-Authority -IncludeManagementTools
@@ -68,7 +67,7 @@ if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done"))) {
                 }
             } else { "ADCS is already installed" }
         }  catch {
-        "ADCS is already installed"
+        "Something went wrong during ADCS install"
         }      
 }
 
