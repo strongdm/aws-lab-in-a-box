@@ -78,6 +78,7 @@ resource "aws_security_group" "gateway" {
   })
 }
 
+#TODO This is temporary while lab is under development. Clean up!
 resource "aws_vpc_security_group_ingress_rule" "allow_ssh_gateway" {
   security_group_id = aws_security_group.gateway.id  
   from_port         = 22
