@@ -9,6 +9,7 @@ resource "sdm_node" "relay" {
     }
 }
 
+#TODO Check if we still need sdm access to the relay
 resource "aws_instance" "relay" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t2.micro"

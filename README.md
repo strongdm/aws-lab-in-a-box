@@ -60,3 +60,8 @@ terraform init
 terraform plan
 terraform apply
 ``` 
+
+## Windows Warnings
+Setting up a Domain controller takes several reboots. This is implemented by a persistent Powershell script that runs at each reboot and has flow control through creating some "flag files" in c:\ with the "done" extension as each step is completed. You can reference the full Powershell script [here](dc/install-dc.ps1.tpl).
+
+This means that of cource that you cannot deploy the "Windows target" until the domain controller is up and running
