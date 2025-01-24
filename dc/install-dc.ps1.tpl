@@ -86,6 +86,26 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
     Import-Module GroupPolicy
     $service = Get-Service -Name "NTDS"
     if ($service.Status -eq "Running") {
+        $domainadminpass = (ConvertTo-SecureString -String "${password}!" -AsPlainText -Force)
+        "Creating Domain Admin"
+            $adminUserParams = @{
+            SamAccountName = "domainadmin"
+            Name           = "Domain Admin"
+            GivenName      = "Domain"
+            Surname        = "Admin"
+            DisplayName    = "Domain Admin"
+            UserPrincipalName = "domainadmin@${name}.local"
+            AccountPassword = $domainadminpass
+            Enabled        = $true
+            PasswordNeverExpires = $true
+            }
+
+        New-ADUser @adminUserParams
+
+        # Add the user to the Domain Admins group
+        Add-ADGroupMember -Identity "Domain Admins" -Members "domainadmin"
+
+        Write-Host "Active Directory domain $domain has been created, and the domain admin user $adminUsername has been created and added to the Domain Admins group."
         # Define GPO name and domain settings
         $GPOName = "Disable NLA and Enable Smart Card Authentication"
         $Domain = "DC=${name},DC=local"

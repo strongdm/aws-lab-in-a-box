@@ -15,11 +15,11 @@ output "dc_password" {
 }
 
 output "domain_admin" {
-    value = "Administrator"
+    value = "domainadmin"
 }
 
 output "domain_password" {
-    value = random_password.admin_password.result
+    value = "${random_password.admin_password.result}!"
 }
 
 output "thistagset" {
