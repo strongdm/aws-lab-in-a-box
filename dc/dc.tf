@@ -42,11 +42,11 @@ resource "aws_key_pair" "windows" {
 
 resource "random_password" "admin_password" {
   length      = 20
-  special     = true
+  special     = false
   min_numeric = 1
   min_upper   = 1
   min_lower   = 1
-  min_special = 1
+
 }
 
 locals {
@@ -56,21 +56,4 @@ locals {
     Name    = "sdm-${var.name}-domain-controller"
     }
   )
-#TODO... this is the original example from Guillermo but it looks super messy. Clean it up!
-#  dc1_fqdn = "dc1.${var.name}.local"
-
-#  dc1_prereq_ad_1 = "Import-Module ServerManager"
-#  dc1_prereq_ad_2 = "Install-WindowsFeature AD-Domain-Services -IncludeAllSubFeature -IncludeManagementTools"
-#  dc1_prereq_ad_3 = "Install-WindowsFeature DNS -IncludeAllSubFeature -IncludeManagementTools"
-#  dc1_prereq_ad_4 = "Import-Module ADDSDeployment"
-#  dc1_prereq_ad_5 = "Import-Module DnsServer"
-#  dc1_prereq_cs_1 = "Install-AdcsCertificationAuthority -CAType StandaloneRootCa"
-
-#  dc1_install_ad_1 = "Install-ADDSForest -DomainName ${var.name}.local -DomainNetbiosName ${var.name} -DomainMode WinThreshold -ForestMode WinThreshold "
-#  dc1_install_ad_2 = "-DatabasePath C:/Windows/NTDS -SysvolPath C:/Windows/SYSVOL -LogPath C:/Windows/NTDS -NoRebootOnCompletion:$false -Force:$true "
-#  dc1_install_ad_3 = "-SafeModeAdministratorPassword (ConvertTo-SecureString ${random_password.admin_password.result} -AsPlainText -Force)"
-
-#  dc1_shutdown_command   = "shutdown -r -t 10"
-#  dc1_exit_code_hack     = "exit 0"
-#  dc1_powershell_command = "${local.dc1_prereq_ad_1}; ${local.dc1_prereq_ad_2}; ${local.dc1_prereq_ad_3}; ${local.dc1_prereq_ad_4}; ${local.dc1_prereq_ad_5}; ${local.dc1_prereq_cs_1}; ${local.dc1_install_ad_1}${local.dc1_install_ad_2}${local.dc1_install_ad_3}; ${local.dc1_shutdown_command}; ${local.dc1_exit_code_hack}"
 }

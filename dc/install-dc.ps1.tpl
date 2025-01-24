@@ -24,56 +24,60 @@ if (((-not (Test-Path "C:\addsinstall.done")) -and (Test-Path "C:\rename.done"))
 
 Import-Module ADDSDeployment
 Import-Module DnsServer
+$scriptPath = "C:\Step2.ps1"
+$scriptContent = @'
+Start-Transcript -Path "C:\SDMDomainSetup.log" -Append
+$retryCount = 0
+"Starting ADCS Loop $(Get-Date)"
+if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and (Test-Path "C:\restart.done"))) {
 
-
-if (((-not (Test-Path "C:\addssetup.done")) -and (Test-Path "C:\addsinstall.done"))) {
-    if (Install-ADDSForest -DomainName ${name}.local -DomainNetbiosName ${name} `
-       -DomainMode WinThreshold -ForestMode WinThreshold `
-       -DatabasePath C:/Windows/NTDS -SysvolPath C:/Windows/SYSVOL `
-        -LogPath C:/Windows/NTDS -NoRebootOnCompletion:$false -Force:$true `
-        -SafeModeAdministratorPassword (ConvertTo-SecureString "${password}" -AsPlainText -Force)) {
-    "AD Set up." | Out-File "C:\addssetup.done"
-    }
-    Restart-Computer
-}
-
-
-if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done"))) {
-        try {
-            if (-not Get-Service -Name "CertSvc") {
-                while (Get-ADDomain) {
-                    "[DCInstall] Starting Installation of CA"
-                    Install-WindowsFeature ADCS-Cert-Authority -IncludeManagementTools
-
-                    Import-Module ADCSDeployment
-                    "[DCInstall] Starting Installation of ADCS"
-                    # Define CA details
-                    $caCommonName = "${name}-CA"  # The Common Name for the CA (e.g., "MyEnterpriseCA")
-                    $caKeyLength = 2048               # Key length for the CA certificate (2048 bits)
-                    $caHashAlgorithm = "SHA256"       # Hash algorithm (SHA256 recommended)
-
-
-                    # Install and configure the Enterprise CA
-                    Install-ADCSCertificationAuthority -CAType EnterpriseRootCA `
-                        -CACommonName $caCommonName `
-                        -KeyLength $caKeyLength `
-                        -HashAlgorithm $caHashAlgorithm `
-                        -ValidityPeriod Years `
-                        -ValidityPeriodUnits 2 `
-                        -Force
-                    "ADCS Set up." | Out-File "C:\adcs.done"
-                } else {
-                    Start-Sleep -seconds 5
+            if (-not (Get-Service -Name "CertSvc")) {
+                "Certificate Services doesn't exist. Installing it"
+                while (!((Get-Service -Name "NTDS")) -and $retryCount -lt 10) {
+                    "Waiting for NTDS to be running $(Get-Date)"
+                    Write-Host "File not found. Retrying... ($retryCount/10)"
+                    Start-Sleep -Seconds 30  # Wait for 30 seconds before retrying
+                    $retryCount++
                 }
+                if (($retryCount -ge 10) -and (-not (Test-Path "C:\restart2.done"))) {
+                    "Preparing for Manual Restart $(Get-Date)" | Out-File "c:\restart2.done"
+                    Restart-Computer -Force   
+                }
+                if (Get-Service -Name "NTDS") {
+                    "[DCInstall] Starting Installation of CA $(Get-Date)"
+                    Install-WindowsFeature ADCS-Cert-Authority -IncludeManagementTools
+                }
+
+            
+            Start-Sleep -Seconds 30
+            $service = Get-Service -Name "CertSvc"
+            if ($service.Status -ne "Running") {
+                Import-Module ADCSDeployment
+                "[DCInstall] Starting Installation of ADCS $(Get-Date)"
+                # Define CA details
+                $caCommonName = "${name}-CA"  # The Common Name for the CA (e.g., "MyEnterpriseCA")
+                $caKeyLength = 2048               # Key length for the CA certificate (2048 bits)
+                $caHashAlgorithm = "SHA256"       # Hash algorithm (SHA256 recommended)
+
+                # Install and configure the Enterprise CA
+                    Install-ADCSCertificationAuthority -CAType EnterpriseRootCA `
+                    -CACommonName $caCommonName `
+                    -KeyLength $caKeyLength `
+                    -HashAlgorithm $caHashAlgorithm `
+                    -ValidityPeriod Years `
+                    -ValidityPeriodUnits 2 `
+                    -Force
+            "ADCS Set up." | Out-File "C:\adcs.done"
+            }
             } else { "ADCS is already installed" }
-        }  catch {
-        "Something went wrong during ADCS install"
-        }      
+        
+          
 }
 
 if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
     $service = Get-Service -Name "CertSvc"
     if ($service.Status -eq "Running") {
+        "Importing StrongDM Certificates"
         Import-Certificate -FilePath "c:\rdp.cer" -CertStoreLocation "Cert:\LocalMachine\Root"
         certutil -dspublish -f C:\rdp.cer RootCA 
         certutil -dspublish -f C:\rdp.cer NTAuthCA
@@ -84,7 +88,7 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
     if ($service.Status -eq "Running") {
         # Define GPO name and domain settings
         $GPOName = "Disable NLA and Enable Smart Card Authentication"
-        $Domain = (Get-ADDomain).DistinguishedName
+        $Domain = "DC=${name},DC=local"
 
         # Create a new GPO if it doesn't exist
         $GPO = Get-GPO -Name $GPOName -ErrorAction SilentlyContinue
@@ -118,7 +122,7 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
 
 
         # Link the GPO to the domain (or specific OU)
-        New-GPLink -Name $GPOName -Target "LDAP://$Domain" -LinkEnabled Yes
+        New-GPLink -Name $GPOName -Target "$Domain" -LinkEnabled Yes -Enforced Yes
         Write-Host "GPO linked to the domain."
 
         # Force the GPO update on all machines in the domain (optional, can be run later)
@@ -126,6 +130,33 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         Write-Host "Group Policy update has been triggered."
         "Certificates and GPOs updated" | Out-File "C:\sdm.done"
     }
+}
+'@
+$scriptContent | Out-File -FilePath $scriptPath -Force
+
+if (((-not (Test-Path "C:\addssetup.done")) -and (Test-Path "C:\addsinstall.done"))) {
+    if (Install-ADDSForest -DomainName ${name}.local -DomainNetbiosName ${name} `
+       -DomainMode WinThreshold -ForestMode WinThreshold `
+       -DatabasePath C:/Windows/NTDS -SysvolPath C:/Windows/SYSVOL `
+        -LogPath C:/Windows/NTDS -NoRebootOnCompletion:$false -Force:$true `
+        -SafeModeAdministratorPassword (ConvertTo-SecureString "${password}" -AsPlainText -Force)) {
+    "AD Set up." | Out-File "C:\addssetup.done"
+    }
+    "Preparing for Manual Restart $(Get-Date)" | Out-File "c:\restart.done"
+    # Define the action to run the PowerShell script
+    $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$scriptPath`""
+
+    # Set the trigger to run 5 minutes from now
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5)
+
+    # Set the task to run with highest privileges
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount
+
+    # Register the scheduled task
+    Register-ScheduledTask -Action $action -Principal $principal -Trigger $trigger -TaskName "RunScheduledScript" -Description "Scheduled task to run script in 5 minutes."
+
+    Write-Host "Part 2 has been created to run as a script in 5 minutes."
+    Restart-Computer -Force
 }
 
 

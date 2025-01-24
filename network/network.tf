@@ -179,6 +179,132 @@ resource "aws_vpc_security_group_ingress_rule" "allow_windows" {
   })
 }
 
+resource "aws_vpc_security_group_ingress_rule" "allow_dns_udp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 53
+  ip_protocol       = "udp"
+  to_port           = 53
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_dns_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 53
+  ip_protocol       = "tcp"
+  to_port           = 53
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_ldap_udp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 389
+  ip_protocol       = "udp"
+  to_port           = 389
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_ldap_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 389
+  ip_protocol       = "tcp"
+  to_port           = 389
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_krb_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 88
+  ip_protocol       = "tcp"
+  to_port           = 88
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_rpc_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 135
+  ip_protocol       = "tcp"
+  to_port           = 135
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_netbios_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 139
+  ip_protocol       = "tcp"
+  to_port           = 139
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_smb_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 445
+  ip_protocol       = "tcp"
+  to_port           = 445
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_ad_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 49152
+  ip_protocol       = "tcp"
+  to_port           = 65535
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
 resource "aws_vpc_security_group_ingress_rule" "allow_linux" {
   count             = var.create_linux_target ? 1 : 0
   security_group_id = aws_security_group.relay.id

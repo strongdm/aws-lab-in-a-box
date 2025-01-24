@@ -25,3 +25,11 @@ output "domain_password" {
 output "thistagset" {
     value = local.thistagset
 } 
+
+output "private_key_pem" {
+    value = tls_private_key.windows.private_key_pem
+}
+
+output "key_name" {
+    value = aws_key_pair.windows.key_name
+}
