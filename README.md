@@ -27,6 +27,9 @@ Export the environment variables
 export SDM_API_ACCESS_KEY=auth-aaabbbbcccccc
 export SDM_API_SECRET_KEY=jksafhlksdhfsahgghdslkhaslghasdlkghlasdkhglkshg
 ```
+Make sure you're logged into sdm with 
+```sdm login```
+specially if you're using the Windows CA target, as it will use the local process to pull the Windows CA Certificate
 
 ## Variables
 - Network
