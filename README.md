@@ -12,7 +12,7 @@ This repository contains a set of modules that enable the user to deploy a quick
 - AWS Read Only access on Both CLI and Console
 - A Windows domain controller 
 - A Windows server target using certificate authentication
-- An EKS Cluster (WIP)
+- An EKS Cluster 
 
 All resources are tagged according to variables set in the module, in order to set adequate access roles in StrongDM
 

@@ -319,6 +319,20 @@ resource "aws_vpc_security_group_ingress_rule" "allow_linux" {
   })
 }
 
+resource "aws_vpc_security_group_ingress_rule" "allow_https" {
+  count             = var.create_eks ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 443
+  ip_protocol       = "tcp"
+  to_port           = 443
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
 resource "aws_default_route_table" "main" {
   default_route_table_id = aws_vpc.main.default_route_table_id
 

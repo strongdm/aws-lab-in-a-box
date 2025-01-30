@@ -41,7 +41,7 @@ variable "public_sg" {
 }
 
 variable "create_eks" {
-  description = "Flag to create an Azure Kubernetes Service (AKS)"
+  description = "Flag to create an Elastic Kubernetes Service"
   type        = bool
   default     = false
 }

@@ -5,6 +5,7 @@ resource "aws_instance" "ssh-target" {
   user_data_replace_on_change = true
   vpc_security_group_ids      = [var.sg]
   
+  #TODO: Change to templatefile("${path.module}/ca-provision.tpl
   user_data = templatefile("../linux-target/ca-provision.tpl", {
     target_user        = var.target_user
     sshca              = var.sshca
