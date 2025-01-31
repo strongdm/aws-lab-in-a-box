@@ -9,7 +9,6 @@ resource "aws_instance" "dc" {
   key_name               = aws_key_pair.windows.key_name
   vpc_security_group_ids = [var.sg]
   subnet_id              = var.subnet_id
-  #TODO: This script takes a bunch of reboots and a bunch of minutes... need to implement something to avoid provisioning domain machines until this is up
   user_data              = templatefile("../dc/install-dc.ps1.tpl", {
     name     = var.name
     password = random_password.admin_password.result
@@ -25,9 +24,15 @@ resource "aws_instance" "dc" {
 
 }
 
+#TODO: Port to powershell in case this is running on Windows
+#data "external" "rdpcertificate" {
+#    program = ["bash", "${path.module}/windowsrdpca.sh"]
+#}
+
 data "external" "rdpcertificate" {
-    program = ["bash", "../dc/windowsrdpca.sh"]
+    program = [local.interpreter, local.script]
 }
+
 
 resource "tls_private_key" "windows" {
   algorithm = "RSA"
@@ -40,20 +45,4 @@ resource "aws_key_pair" "windows" {
 
 }
 
-resource "random_password" "admin_password" {
-  length      = 20
-  special     = false
-  min_numeric = 1
-  min_upper   = 1
-  min_lower   = 1
 
-}
-
-locals {
-  thistagset = merge (var.tagset, {
-    network = "Private"
-    class   = "sdminfra"
-    Name    = "sdm-${var.name}-domain-controller"
-    }
-  )
-}

@@ -12,7 +12,7 @@ module "dc" {
 resource "sdm_resource" "dc" {
     count = var.create_domain_controller == false ? 0 : 1
     rdp {
-        name     = "domain-controller"
+        name     = "${var.name}-domain-controller"
         hostname = one(module.dc[*].dc_fqdn)
         username = one(module.dc[*].dc_username)
         password = one(module.dc[*].dc_password)

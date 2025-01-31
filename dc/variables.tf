@@ -30,3 +30,27 @@ variable "target_user" {
   type        = string
   default     = "ubuntu"
 }
+
+
+
+resource "random_password" "admin_password" {
+  length      = 20
+  special     = false
+  min_numeric = 1
+  min_upper   = 1
+  min_lower   = 1
+
+}
+
+locals {
+  admin_password = random_password.admin_password.result
+  is_linux = length(regexall("c:", lower(abspath(path.root)))) > 0
+  interpreter = local.is_linux ? "powershell" : "bash"
+  script      = format("%s/%s",path.module,local.is_linux ? "windowsrdpca.ps1" : "windowsrdpca.sh")
+  thistagset = merge (var.tagset, {
+    network = "Private"
+    class   = "sdminfra"
+    Name    = "sdm-${var.name}-domain-controller"
+    }
+  )  
+}
