@@ -9,7 +9,7 @@ module "awsro" {
 resource "sdm_resource" "awsrocli" {
     count = var.create_aws_ro == false ? 0 : 1
     aws_instance_profile {
-        name     = "aws-cli-ro"
+        name     = "${var.name}-aws-cli-ro"
         region   = data.aws_region.current.name
         role_arn = one(module.awsro[*].ec2_read_only_role_arn)
         

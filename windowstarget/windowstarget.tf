@@ -9,7 +9,6 @@ resource "aws_instance" "windowstarget" {
   key_name               = var.key_name
   vpc_security_group_ids = [var.sg]
   subnet_id              = var.subnet_id
-  #TODO: Troubleshoot
   user_data              = templatefile("../windowstarget/join-domain.ps1.tpl", {
     name     = var.name
     dc_ip    = var.dc_ip

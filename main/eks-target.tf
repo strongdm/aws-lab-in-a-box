@@ -12,7 +12,7 @@ resource "sdm_resource" "eks" {
     amazon_eks_instance_profile {
         certificate_authority = base64decode(module.eks[0].ca[0].data)
         endpoint = module.eks[0].endpoint
-        name = "eks-cluster"
+        name = "${var.name}-eks-cluster"
         cluster_name = module.eks[0].name
         region = data.aws_region.current.name
         tags = module.eks[0].thistagset

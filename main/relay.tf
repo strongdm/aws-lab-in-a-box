@@ -9,13 +9,10 @@ resource "sdm_node" "relay" {
     }
 }
 
-#TODO Check if we still need sdm access to the relay
 resource "aws_instance" "relay" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t2.micro"
-#  subnet_id                   = coalesce(var.relay_subnet,one(module.network[*].relay_subnet))
   user_data_replace_on_change = true
-#  vpc_security_group_ids      = [one(module.network[*].private_sg)]
   key_name                    = aws_key_pair.relay.key_name
 
   iam_instance_profile = aws_iam_instance_profile.gw_instance_profile.name

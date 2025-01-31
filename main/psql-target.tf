@@ -12,7 +12,7 @@ resource "sdm_resource" "rds-psql-target" {
     count = var.create_rds_postgresql == false ? 0 : 1
     postgres {
         database = one(module.psql-target[*].db_name)
-        name     = "postgresql-target"
+        name     = "${var.name}-postgresql-target"
         hostname = one(module.psql-target[*].target_hostname)
         port     = one(module.psql-target[*].target_port)
         username = "${one(module.psql-target[*].secret_arn)}?key=username"

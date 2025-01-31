@@ -14,7 +14,7 @@ module "linux-target" {
 resource "sdm_resource" "ssh-ca-target" {
     count = var.create_linux_target == false ? 0 : 1
     ssh_cert {
-        name     = "ssh-ca-target"
+        name     = "${var.name}-ssh-ca-target"
         hostname = one(module.linux-target[*].target_hostname)
         username = one(module.linux-target[*].target_username)
         port     = 22

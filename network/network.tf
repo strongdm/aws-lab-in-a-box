@@ -78,20 +78,20 @@ resource "aws_security_group" "gateway" {
   })
 }
 
-#TODO This is temporary while lab is under development. Clean up!
-resource "aws_vpc_security_group_ingress_rule" "allow_ssh_gateway" {
-  security_group_id = aws_security_group.gateway.id  
-  from_port         = 22
-  ip_protocol       = "tcp"
-  to_port           = 22
-  cidr_ipv4         = "0.0.0.0/0"
+#resource "aws_vpc_security_group_ingress_rule" "allow_ssh_gateway" {
+#  security_group_id = aws_security_group.gateway.id  
+#  from_port         = 22
+#  ip_protocol       = "tcp"
+#  to_port           = 22
+#  cidr_ipv4         = "0.0.0.0/0"
 
   
-  tags = merge (var.tagset, {
-    network = "Public"
-    Name    = "${var.name}-Public-sg"
-  })
-}
+#  tags = merge (var.tagset, {
+
+#    network = "Public"
+#    Name    = "${var.name}-Public-sg"
+#  })
+#}
 
 resource "aws_vpc_security_group_ingress_rule" "allow_icmp" {
   security_group_id = aws_security_group.gateway.id  
