@@ -13,7 +13,11 @@ resource "sdm_resource" "awsrocli" {
         region   = data.aws_region.current.name
         role_arn = one(module.awsro[*].ec2_read_only_role_arn)
         
-        tags = var.tagset
+        tags = merge (var.tagset, {
+            network = "Public"
+            class   = "target"
+            }
+        ) 
 
     }
 }
@@ -26,7 +30,11 @@ resource "sdm_resource" "awsroconsole" {
         role_arn  = one(module.awsro[*].ec2_read_only_role_arn)
         subdomain = "aws${var.name}"
 
-        tags = var.tagset
+        tags = merge (var.tagset, {
+            network = "Public"
+            class   = "target"
+            }
+        )  
 
     }
 }
