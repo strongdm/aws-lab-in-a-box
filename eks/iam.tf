@@ -70,26 +70,3 @@ resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSNetworkingPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
   role       = aws_iam_role.cluster.name
 }
-
-#data "aws_iam_policy_document" "eks_access_assume_role_policy" {
-#  statement {
-#    actions   = ["sts:AssumeRole"]
-#    effect    = "Allow"
-#  principals {
-#      type        = "Service"
-#      identifiers = ["ec2.amazonaws.com"]
-#    }
-#
-#  principals {
-#      type        = "AWS"
-#      identifiers = [var.role]
-
-#    }
-#  }
-#}
-#resource "aws_iam_role" "eks_access_role" {
-#  name               = "${var.name}-EKSAccessRole"
-#  assume_role_policy = data.aws_iam_policy_document.eks_access_assume_role_policy.json
-#  
-#  tags = var.tagset
-#}
