@@ -109,6 +109,8 @@ resource "aws_instance" "gateway" {
   user_data = templatefile("gw-provision.tpl", {
     sdm_relay_token    = sdm_node.gateway.gateway[0].token
     target_user        = "ubuntu"
+    sdm_domain         = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))),"")
+
   })
 
     tags = merge (var.tagset, {
