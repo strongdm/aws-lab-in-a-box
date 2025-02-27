@@ -19,6 +19,8 @@ resource "aws_instance" "relay" {
   user_data = templatefile("gw-provision.tpl", {
     sdm_relay_token    = sdm_node.relay.relay[0].token
     target_user        = "ubuntu"
+    sdm_domain         = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))),"")
+
   })
   network_interface {
     device_index = 0

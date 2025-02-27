@@ -31,6 +31,19 @@ or in Powershell
 $env:SDM_API_ACCESS_KEY="auth-xxxxxx888x8x88x8x6"
 $env:SDM_API_SECRET_KEY="X4fasfasfasfasfasfsafaaqED34ge5343CkQ"
 ```
+
+> [!NOTE]
+> If your control plane is in the UK, or the EU, make sure that the SDM_HOST_API variable is correctly set.
+> Gateways and relays *will* use this variable as well to register against the right tenant
+
+```bash
+export SDM_API_HOST=api.uk.strongdm.com:443
+```
+or in Powershell
+```powershell
+$env:SDM_API_HOST="api.uk.strongdm.com:443"
+```
+
 > [!NOTE]
 > The verification of the operating system is done based on the presence of "c:" in the module path. If there is no c:,
 > the module will not assume you're using Windows.
