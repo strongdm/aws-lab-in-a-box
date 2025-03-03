@@ -117,13 +117,25 @@ variable "secretvalue" {
 #---------- AWS Access Configuration ----------#
 
 variable "create_aws_ro" {
-  description = "Create an access profile for StrongDM users in AWS with ReadOnly S3 Permissions"
+  description = "Create an access profile for StrongDM users in AWS with ReadOnly Permissions"
   type        = bool
   default     = false
 }
 
-variable "create_s3_rw" {
+variable "create_aws_s3ro" {
+  description = "Create an access profile for StrongDM users in AWS with Read Only S3 Permissions"
+  type        = bool
+  default     = false
+}
+
+variable "create_aws_s3full" {
   description = "Create an access profile for StrongDM users in AWS with Full S3 Permissions"
+  type        = bool
+  default     = false
+}
+
+variable "create_aws_gluefull" {
+  description = "Create an access profile for StrongDM users in AWS with Full Glue Permissions"
   type        = bool
   default     = false
 }
@@ -166,3 +178,4 @@ variable "vault_version" {
   type        = string
   default     = "1.18.4"
 }
+
