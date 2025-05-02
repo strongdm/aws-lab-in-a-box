@@ -12,8 +12,8 @@
 
 # Create the network infrastructure using the network module
 module "network" {
-  count  = var.vpc == null ? 1 : 0  # Only create if not using an existing VPC
-  source = "../network"             # Reference to the network module
+  count  = var.vpc == null ? 1 : 0 # Only create if not using an existing VPC
+  source = "../network"            # Reference to the network module
 
   # Pass through all feature flags to determine necessary security group rules
   vpc                      = var.vpc

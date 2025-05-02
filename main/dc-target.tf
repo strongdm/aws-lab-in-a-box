@@ -15,25 +15,25 @@
 
 # Create the domain controller using the dc module
 module "dc" {
-  source    = "../dc"                           # Reference to the domain controller module
-  count     = var.create_domain_controller == false ? 0 : 1  # Conditionally create based on feature flag
-  ami       = data.aws_ami.windows.id           # Windows Server AMI defined in amis.tf
-  tagset    = var.tagset                        # Tags for resource identification
-  name      = var.name                          # Name prefix for resources and domain name
-  subnet_id = coalesce(var.relay_subnet, one(module.network[*].relay_subnet))  # Private subnet
-  sg        = coalesce(var.public_sg, module.network[0].private_sg)  # Security group
+  source    = "../dc"                                                         # Reference to the domain controller module
+  count     = var.create_domain_controller == false ? 0 : 1                   # Conditionally create based on feature flag
+  ami       = data.aws_ami.windows.id                                         # Windows Server AMI defined in amis.tf
+  tagset    = var.tagset                                                      # Tags for resource identification
+  name      = var.name                                                        # Name prefix for resources and domain name
+  subnet_id = coalesce(var.relay_subnet, one(module.network[*].relay_subnet)) # Private subnet
+  sg        = coalesce(var.public_sg, module.network[0].private_sg)           # Security group
 }
 
 # Register the domain controller as an RDP resource in StrongDM for administrative access
 resource "sdm_resource" "dc" {
   count = var.create_domain_controller == false ? 0 : 1
   rdp {
-    name     = "${var.name}-domain-controller"  # Resource name in StrongDM
-    hostname = one(module.dc[*].dc_fqdn)        # Private DNS name of the domain controller
-    username = one(module.dc[*].dc_username)    # Local administrator username
-    password = one(module.dc[*].dc_password)    # Local administrator password
+    name     = "${var.name}-domain-controller" # Resource name in StrongDM
+    hostname = one(module.dc[*].dc_fqdn)       # Private DNS name of the domain controller
+    username = one(module.dc[*].dc_username)   # Local administrator username
+    password = one(module.dc[*].dc_password)   # Local administrator password
 
-    port = 3389                                 # Standard RDP port
-    tags = one(module.dc[*].thistagset)         # Tags for access control
+    port = 3389                         # Standard RDP port
+    tags = one(module.dc[*].thistagset) # Tags for access control
   }
 }

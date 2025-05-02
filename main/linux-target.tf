@@ -14,15 +14,15 @@
 
 # Create the Linux target instance using the linux-target module
 module "linux-target" {
-  source      = "../linux-target"                 # Reference to the linux-target module
-  count       = var.create_linux_target == false ? 0 : 1  # Conditionally create based on feature flag
-  target_user = "ubuntu"                          # Username for SSH access
-  ami         = data.aws_ami.ubuntu.id            # Ubuntu AMI defined in amis.tf
-  sshca       = data.sdm_ssh_ca_pubkey.ssh_pubkey_query.public_key  # CA public key from StrongDM
-  tagset      = var.tagset                        # Tags for resource identification
-  name        = var.name                          # Name prefix for resources
-  subnet_id   = coalesce(var.relay_subnet, one(module.network[*].relay_subnet))  # Private subnet
-  sg          = coalesce(var.public_sg, module.network[0].private_sg)  # Security group
+  source      = "../linux-target"                                               # Reference to the linux-target module
+  count       = var.create_linux_target == false ? 0 : 1                        # Conditionally create based on feature flag
+  target_user = "ubuntu"                                                        # Username for SSH access
+  ami         = data.aws_ami.ubuntu.id                                          # Ubuntu AMI defined in amis.tf
+  sshca       = data.sdm_ssh_ca_pubkey.ssh_pubkey_query.public_key              # CA public key from StrongDM
+  tagset      = var.tagset                                                      # Tags for resource identification
+  name        = var.name                                                        # Name prefix for resources
+  subnet_id   = coalesce(var.relay_subnet, one(module.network[*].relay_subnet)) # Private subnet
+  sg          = coalesce(var.public_sg, module.network[0].private_sg)           # Security group
 
 }
 
@@ -30,11 +30,11 @@ module "linux-target" {
 resource "sdm_resource" "ssh-ca-target" {
   count = var.create_linux_target == false ? 0 : 1
   ssh_cert {
-    name     = "${var.name}-ssh-ca-target"        # Resource name in StrongDM
-    hostname = one(module.linux-target[*].target_hostname)  # Private IP of the target
-    username = one(module.linux-target[*].target_username)  # User configured for access
-    port     = 22                                 # Standard SSH port
-    tags     = one(module.linux-target[*].thistagset)  # Tags for access control
+    name     = "${var.name}-ssh-ca-target"                 # Resource name in StrongDM
+    hostname = one(module.linux-target[*].target_hostname) # Private IP of the target
+    username = one(module.linux-target[*].target_username) # User configured for access
+    port     = 22                                          # Standard SSH port
+    tags     = one(module.linux-target[*].thistagset)      # Tags for access control
 
   }
 }

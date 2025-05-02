@@ -84,9 +84,9 @@ resource "aws_iam_instance_profile" "gw_instance_profile" {
 # Create a StrongDM gateway node in the control plane
 resource "sdm_node" "gateway" {
   gateway {
-    name           = "sdm-${var.name}-lab-gw"       # Gateway name visible in StrongDM
-    listen_address = "${aws_eip.gateway.public_dns}:5000"  # Public endpoint for client connections
-    bind_address   = "0.0.0.0:5000"                 # Local binding for the gateway service
+    name           = "sdm-${var.name}-lab-gw"             # Gateway name visible in StrongDM
+    listen_address = "${aws_eip.gateway.public_dns}:5000" # Public endpoint for client connections
+    bind_address   = "0.0.0.0:5000"                       # Local binding for the gateway service
     tags = merge(var.tagset, {
       network = "Public"
       class   = "sdminfra"
@@ -127,11 +127,11 @@ resource "aws_instance" "gateway" {
   iam_instance_profile        = aws_iam_instance_profile.gw_instance_profile.name
   vpc_security_group_ids      = [one(module.network[*].public_sg)]
   key_name                    = aws_key_pair.gateway.key_name
-  
+
   # Bootstrap the gateway using the provisioning template
   user_data = templatefile("gw-provision.tpl", {
-    sdm_relay_token = sdm_node.gateway.gateway[0].token  # Token for gateway registration
-    target_user     = "ubuntu"                           # User to run the gateway service
+    sdm_relay_token = sdm_node.gateway.gateway[0].token # Token for gateway registration
+    target_user     = "ubuntu"                          # User to run the gateway service
     sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
   })
 
