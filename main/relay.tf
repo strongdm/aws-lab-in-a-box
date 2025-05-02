@@ -1,12 +1,12 @@
 resource "sdm_node" "relay" {
-    relay {
-        name = "sdm-${var.name}-lab-r"
-        tags = merge (var.tagset, {
-          network = "Private"
-          class   = "sdminfra"
-          }
-        )
-    }
+  relay {
+    name = "sdm-${var.name}-lab-r"
+    tags = merge(var.tagset, {
+      network = "Private"
+      class   = "sdminfra"
+      }
+    )
+  }
 }
 
 resource "aws_instance" "relay" {
@@ -17,17 +17,17 @@ resource "aws_instance" "relay" {
 
   iam_instance_profile = aws_iam_instance_profile.gw_instance_profile.name
   user_data = templatefile("gw-provision.tpl", {
-    sdm_relay_token    = sdm_node.relay.relay[0].token
-    target_user        = "ubuntu"
-    sdm_domain         = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))),"")
+    sdm_relay_token = sdm_node.relay.relay[0].token
+    target_user     = "ubuntu"
+    sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
 
   })
   network_interface {
-    device_index = 0
+    device_index         = 0
     network_interface_id = aws_network_interface.relay.id
   }
 
-    tags = merge (var.tagset, {
+  tags = merge(var.tagset, {
     network = "Private"
     class   = "sdminfra"
     Name    = "sdm-${var.name}-lab-r"
@@ -45,17 +45,17 @@ resource "aws_key_pair" "relay" {
 }
 
 resource "sdm_resource" "relay" {
-    ssh {
-        name     = "${var.name}-relay"
-        hostname = aws_network_interface.relay.private_ip
-        username = "ubuntu"
-        port     = 22
-        
-        tags = merge (var.tagset, {
-          network = "Public"
-          class   = "sdminfra"
-          }
-        )
+  ssh {
+    name     = "${var.name}-relay"
+    hostname = aws_network_interface.relay.private_ip
+    username = "ubuntu"
+    port     = 22
 
-    }
+    tags = merge(var.tagset, {
+      network = "Public"
+      class   = "sdminfra"
+      }
+    )
+
+  }
 }

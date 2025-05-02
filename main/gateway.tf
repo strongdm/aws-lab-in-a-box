@@ -1,7 +1,7 @@
 resource "aws_eip" "gateway" {
   domain = "vpc"
 
-  tags = merge (var.tagset, {
+  tags = merge(var.tagset, {
     network = "Public"
     class   = "sdminfra"
     }
@@ -23,7 +23,7 @@ resource "aws_iam_role" "gateway" {
       }
     ]
   })
-  tags = merge (var.tagset, {
+  tags = merge(var.tagset, {
     network = "Public"
     class   = "sdminfra"
     }
@@ -43,7 +43,7 @@ resource "aws_iam_policy" "secrets_manager_policy" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "aws:ResourceTag/${var.secretkey}" = "${var.secretvalue}"  # Only allows reading secrets with this tag
+            "aws:ResourceTag/${var.secretkey}" = "${var.secretvalue}" # Only allows reading secrets with this tag
           }
         }
       }
@@ -65,32 +65,32 @@ resource "aws_iam_instance_profile" "gw_instance_profile" {
 }
 
 resource "sdm_node" "gateway" {
-    gateway {
-        name = "sdm-${var.name}-lab-gw"
-        listen_address = "${aws_eip.gateway.public_dns}:5000"
-        bind_address = "0.0.0.0:5000"
-        tags = merge (var.tagset, {
-          network = "Public"
-          class   = "sdminfra"
-          }
-        )
-    }
+  gateway {
+    name           = "sdm-${var.name}-lab-gw"
+    listen_address = "${aws_eip.gateway.public_dns}:5000"
+    bind_address   = "0.0.0.0:5000"
+    tags = merge(var.tagset, {
+      network = "Public"
+      class   = "sdminfra"
+      }
+    )
+  }
 }
 
 resource "sdm_resource" "gateway" {
-    ssh {
-        name     = "${var.name}-gateway"
-        hostname = aws_eip.gateway.public_dns
-        username = "ubuntu"
-        port     = 22
-        
-        tags = merge (var.tagset, {
-          network = "Public"
-          class   = "sdminfra"
-          }
-        )
+  ssh {
+    name     = "${var.name}-gateway"
+    hostname = aws_eip.gateway.public_dns
+    username = "ubuntu"
+    port     = 22
 
-    }
+    tags = merge(var.tagset, {
+      network = "Public"
+      class   = "sdminfra"
+      }
+    )
+
+  }
 }
 
 resource "aws_key_pair" "gateway" {
@@ -101,19 +101,19 @@ resource "aws_key_pair" "gateway" {
 resource "aws_instance" "gateway" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t2.micro"
-  subnet_id                   = coalesce(var.gateway_subnet,one(module.network[*].gateway_subnet))
+  subnet_id                   = coalesce(var.gateway_subnet, one(module.network[*].gateway_subnet))
   user_data_replace_on_change = true
   iam_instance_profile        = aws_iam_instance_profile.gw_instance_profile.name
   vpc_security_group_ids      = [one(module.network[*].public_sg)]
-  key_name  = aws_key_pair.gateway.key_name
+  key_name                    = aws_key_pair.gateway.key_name
   user_data = templatefile("gw-provision.tpl", {
-    sdm_relay_token    = sdm_node.gateway.gateway[0].token
-    target_user        = "ubuntu"
-    sdm_domain         = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))),"")
+    sdm_relay_token = sdm_node.gateway.gateway[0].token
+    target_user     = "ubuntu"
+    sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
 
   })
 
-    tags = merge (var.tagset, {
+  tags = merge(var.tagset, {
     network = "Public"
     class   = "sdminfra"
     Name    = "sdm-${var.name}-lab-gw"

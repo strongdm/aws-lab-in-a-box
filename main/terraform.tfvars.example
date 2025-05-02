@@ -7,6 +7,9 @@ tagset    = { environment = "Lab"
 #An arbitrary name to all resources
 name      = "PartnerTraining"
 
+#AWS region to deploy resources
+#region    = "us-west-2"  # Change to your preferred region
+
 #Add a linux resource with CA Authentication
 create_linux_target = true
 
@@ -21,6 +24,9 @@ create_linux_target = true
 
 #Create an EKS Cluster Target
 #create_eks = true
+
+#Create an DocumentDB Replicaset Cluster Target
+#create_documentdb = true
 
 #Allow to access secrets with this key/value
 secretkey = "sdm-owner"
