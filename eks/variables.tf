@@ -1,28 +1,37 @@
+#--------------------------------------------------------------
+# EKS Module Variables
+#
+# This file defines the input variables required to configure the EKS
+# cluster. These variables are used to customize the deployment based on
+# the network configuration, naming standards, and integration with
+# StrongDM.
+#--------------------------------------------------------------
+
 variable "subnet_id" {
-  description = "Subnet id in which to deploy the system"
-  type        = list
+  description = "List of subnet IDs in which to deploy the EKS cluster. Should be at least two subnets in different availability zones for high availability."
+  type        = list(string)
   default     = null
 }
 
 variable "tagset" {
-  description = "Set of Tags to apply to StrongDM resources"
+  description = "Map of tags to apply to all StrongDM and EKS resources. Used for resource organization and identification in AWS console."
   type        = map(string)
 }
 
 variable "name" {
-  description = "Arbitrary string to add to resources"
+  description = "Name prefix to add to all created resources. Used to identify resources belonging to this deployment."
   type        = string
 }
 
 variable "role" {
-  description = "Gateway Role to associate"
+  description = "IAM role ARN to associate with the EKS cluster. This role will be granted admin permissions to the cluster through StrongDM."
   type        = string
 }
 
 locals {
-  thistagset = merge (var.tagset, {
-    network = "Private"
-    class   = "target"
-    }
-  )  
+  # Merge provided tags with EKS-specific tags to ensure proper classification
+  thistagset = merge(var.tagset, {
+    network = "Private"     # Indicates this resource belongs to a private network
+    class   = "target"      # Identifies this resource as a target for StrongDM
+  })  
 }
