@@ -1,3 +1,12 @@
+#--------------------------------------------------------------
+# Windows Target Module Variables
+#
+# This file defines all input variables needed for the Windows target module.
+# These variables control the network placement, domain integration, 
+# authentication, and identification of the Windows instance used for
+# RDP access demonstrations with StrongDM.
+#--------------------------------------------------------------
+
 variable "subnet_id" {
   description = "Subnet id in which to deploy the system"
   type        = string
