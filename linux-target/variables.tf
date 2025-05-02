@@ -1,3 +1,11 @@
+#--------------------------------------------------------------
+# Linux Target Module Variables
+#
+# This file defines all input variables needed for the Linux target module.
+# These variables control the network placement, authentication, and 
+# identification of the Linux instance used for SSH CA authentication demos.
+#--------------------------------------------------------------
+
 variable "subnet_id" {
   description = "Subnet id in which to deploy the system"
   type        = string
@@ -31,7 +39,7 @@ variable "ami" {
 }
 
 variable "target_user" {
-  description = "User for Health check"
+  description = "User for Health check and SSH access via StrongDM"
   type        = string
   default     = "ubuntu"
 }
