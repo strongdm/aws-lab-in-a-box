@@ -1,3 +1,15 @@
+# This file defines a Kubernetes Service that exposes the NGINX web server deployment.
+# It creates a stable endpoint to access the pods created by the eks-sample-linux-deployment.
+#
+# Key components of this service:
+# - ClusterIP type (default) for internal cluster access
+# - Selector matching the deployment's app label
+# - Port 80 mapping for standard HTTP traffic
+#
+# This service demonstrates basic Kubernetes networking concepts and
+# provides a consistent way to access the NGINX deployment regardless
+# of which specific pods are running or their dynamic IP addresses.
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,8 +19,8 @@ metadata:
     app: eks-sample-linux-app
 spec:
   selector:
-    app: eks-sample-linux-app
+    app: eks-sample-linux-app  # Links to pods with this label
   ports:
     - protocol: TCP
-      port: 80
-      targetPort: 80
+      port: 80                 # Port exposed by the service
+      targetPort: 80           # Port to forward to on the pods
