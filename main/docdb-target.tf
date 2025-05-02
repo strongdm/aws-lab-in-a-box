@@ -14,12 +14,17 @@
 
 # Create the DocumentDB cluster using our reusable module
 module "docdb-target" {
-  source    = "../docdb"
-  count     = var.create_docdb == false ? 0 : 1
-  subnet_id = [coalesce(var.relay_subnet, one(module.network[*].relay_subnet)), coalesce(var.relay_subnet-b, one(module.network[*].relay_subnet-b)), coalesce(var.relay_subnet-c, one(module.network[*].relay_subnet-c))]
-  tagset    = var.tagset
-  name      = var.name
-  sg        = coalesce(var.public_sg, module.network[0].private_sg)
+  source    = "../docdb"                       # Reference to the DocumentDB module
+  count     = var.create_docdb == false ? 0 : 1  # Conditionally create based on feature flag
+  
+  # Use subnets across multiple availability zones for high availability
+  subnet_id = [coalesce(var.relay_subnet, one(module.network[*].relay_subnet)), 
+              coalesce(var.relay_subnet-b, one(module.network[*].relay_subnet-b)), 
+              coalesce(var.relay_subnet-c, one(module.network[*].relay_subnet-c))]
+  
+  tagset    = var.tagset                       # Tags for resource identification
+  name      = var.name                         # Name prefix for resources
+  sg        = coalesce(var.public_sg, module.network[0].private_sg)  # Security group
 }
 
 # Register the DocumentDB cluster in StrongDM as a managed resource
@@ -27,10 +32,10 @@ module "docdb-target" {
 resource "sdm_resource" "docdb-target" {
   count = var.create_docdb == false ? 0 : 1
   document_db_replica_set {
-    name          = "${var.name}-docdb-target"
-    hostname      = one(module.docdb-target[*].docdb_endpoint)
-    username      = one(module.docdb-target[*].docdb_username)
-    password      = one(module.docdb-target[*].docdb_password)
+    name          = "${var.name}-docdb-target"  # Resource name in StrongDM
+    hostname      = one(module.docdb-target[*].docdb_endpoint)  # Cluster endpoint address
+    username      = one(module.docdb-target[*].docdb_username)  # Admin username
+    password      = one(module.docdb-target[*].docdb_password)  # Admin password
     auth_database = "admin"                                # Default authentication database
     replica_set   = "rs0"                                  # Default replica set name
     tags          = one(module.docdb-target[*].thistagset) # Apply consistent tagging
