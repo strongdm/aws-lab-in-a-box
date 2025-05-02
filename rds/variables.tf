@@ -1,3 +1,11 @@
+#--------------------------------------------------------------
+# RDS PostgreSQL Module Variables
+#
+# This file defines all input variables needed for the RDS PostgreSQL module.
+# These variables control the network placement, database configuration,
+# and identification of the PostgreSQL instance used for database access demos.
+#--------------------------------------------------------------
+
 variable "subnet_id" {
   description = "Subnet id in which to deploy the system"
   type        = list
