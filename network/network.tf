@@ -1,3 +1,21 @@
+#--------------------------------------------------------------
+# AWS Network Infrastructure Module
+#
+# This module creates the foundational networking components needed for the 
+# StrongDM lab environment. The network infrastructure follows AWS best practices
+# with a public subnet for internet-facing components and private subnets for 
+# protected resources.
+#
+# Components:
+# - VPC with DNS support
+# - Public subnet for the StrongDM Gateway
+# - Private subnets for target resources (databases, servers, etc.)
+# - Internet Gateway for public subnet internet access
+# - NAT Gateway for private subnet internet access
+# - Security Groups with appropriate ingress/egress rules
+# - Route tables configured for proper network isolation
+#--------------------------------------------------------------
+
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -78,21 +96,6 @@ resource "aws_security_group" "gateway" {
   })
 }
 
-#resource "aws_vpc_security_group_ingress_rule" "allow_ssh_gateway" {
-#  security_group_id = aws_security_group.gateway.id  
-#  from_port         = 22
-#  ip_protocol       = "tcp"
-#  to_port           = 22
-#  cidr_ipv4         = "0.0.0.0/0"
-
-  
-#  tags = merge (var.tagset, {
-
-#    network = "Public"
-#    Name    = "${var.name}-Public-sg"
-#  })
-#}
-
 resource "aws_vpc_security_group_ingress_rule" "allow_icmp" {
   security_group_id = aws_security_group.gateway.id  
   ip_protocol       = "icmp"
@@ -158,6 +161,20 @@ resource "aws_vpc_security_group_ingress_rule" "allow_postgresql" {
   from_port         = 5432
   ip_protocol       = "tcp"
   to_port           = 5432
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_documentdb" {
+  count             = var.create_docdb ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 27017
+  ip_protocol       = "tcp"
+  to_port           = 27017
   
   tags = merge (var.tagset, {
     network = "Private"

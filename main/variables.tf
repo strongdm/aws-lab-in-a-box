@@ -1,3 +1,14 @@
+#--------------------------------------------------------------
+# Main Variables
+#
+# This file defines all variables needed to configure the AWS Lab-in-a-Box
+# environment. Configuration is primarily done through feature flags that
+# enable/disable specific resource types, along with network configuration 
+# options and general settings.
+#--------------------------------------------------------------
+
+#---------- Network Configuration ----------#
+
 variable "vpc" {
   description = "Use an existing VPC. If nil a new VPC will be created"
   type        = string
@@ -40,6 +51,9 @@ variable "public_sg" {
   default     = null
 }
 
+#---------- Resource Feature Flags ----------#
+# Set these to true to enable specific resource types in the deployment
+
 variable "create_eks" {
   description = "Flag to create an Elastic Kubernetes Service"
   type        = bool
@@ -48,6 +62,12 @@ variable "create_eks" {
 
 variable "create_rds_postgresql" {
   description = "Flag to create an RDS PostgreSQL instance"
+  type        = bool
+  default     = false
+}
+
+variable "create_docdb" {
+  description = "Flag to create an Amazon DocumentDB instance"
   type        = bool
   default     = false
 }
@@ -70,15 +90,19 @@ variable "create_linux_target" {
   default     = false
 }
 
+#---------- Metadata Configuration ----------#
+
 variable "tagset" {
-  description = "Set of Tags to apply to StrongDM resources"
+  description = "Set of Tags to apply to StrongDM resources and AWS infrastructure"
   type        = map(string)
 }
 
 variable "name" {
-  description = "Arbitrary string to add to resources"
+  description = "Arbitrary string to add to resources for identification"
   type        = string
 }
+
+#---------- Secrets Configuration ----------#
 
 variable "secretkey" {
   description = "Key for the tag used to filter secrets manager secrets"
@@ -90,6 +114,8 @@ variable "secretvalue" {
   type        = string
 }
 
+#---------- AWS Access Configuration ----------#
+
 variable "create_aws_ro" {
   description = "Create an access profile for StrongDM users in AWS with ReadOnly S3 Permissions"
   type        = bool
@@ -100,4 +126,12 @@ variable "create_s3_rw" {
   description = "Create an access profile for StrongDM users in AWS with Full S3 Permissions"
   type        = bool
   default     = false
+}
+
+#---------- AWS Region Configuration ----------#
+
+variable "region" {
+  description = "AWS region where resources will be created"
+  type        = string
+  default     = "us-east-2" // Default region if none specified
 }

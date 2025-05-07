@@ -1,22 +1,38 @@
+#--------------------------------------------------------------
+# EKS Cluster Outputs
+#
+# These outputs are used by the main module to register the EKS cluster
+# with StrongDM as a Kubernetes resource target. They provide the
+# necessary information for authentication and connection to the cluster.
+#--------------------------------------------------------------
+
 output "name" {
-    value = aws_eks_cluster.eks.name
+  description = "The name of the EKS cluster, used as identifier in StrongDM"
+  value       = aws_eks_cluster.eks.name
+}
+
+output "endpoint" {
+  description = "The API server endpoint URL for the EKS cluster"
+  value       = aws_eks_cluster.eks.endpoint
 }
 
 output "ca" {
-    value = aws_eks_cluster.eks.certificate_authority
+  description = "Certificate authority data for the EKS cluster, required for secure connection"
+  value       = aws_eks_cluster.eks.certificate_authority
 }
 
-#output "role" {
-#    value = aws_iam_role.eks_access_role.arn
-#}
-
-output "endpoint" {
-    value = aws_eks_cluster.eks.endpoint
-}
 output "identity" {
-    value = aws_eks_cluster.eks.identity
+  description = "Information about the OIDC identity provider for the cluster"
+  value       = aws_eks_cluster.eks.identity
 }
 
 output "thistagset" {
-    value = local.thistagset
+  description = "Tags applied to EKS resources, useful for resource organization and StrongDM integration"
+  value       = local.thistagset
 }
+
+# Commented out legacy output - keeping for reference
+#output "role" {
+#  description = "The IAM role ARN for EKS access"
+#  value       = aws_iam_role.eks_access_role.arn
+#}

@@ -26,6 +26,12 @@ variable "create_rds_postgresql" {
   default     = false
 }
 
+variable "create_docdb" {
+  description = "Flag to create an Amazon DocumentDB instance"
+  type        = bool
+  default     = false
+}
+
 variable "create_domain_controller" {
   description = "Flag to create a domain controller"
   type        = bool
