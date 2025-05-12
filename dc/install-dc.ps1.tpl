@@ -139,6 +139,14 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
             Write-Host "Error: Failed to set Smart Card Service registry value. Please ensure the key path is correct."
             exit
         }
+        # Set the right Certificate Enforcement per KBKB5014754
+        try {
+            New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Kdc" -Name "StrongCertificateBindingEnforcement" -PropertyType DWORD -Value 1 -Force 
+            Write-Host "Strong Certificate Enforcement Disabled."
+        } catch {
+            Write-Host "Error: Couldn't set appropiate certificate enforcement. Certificate logins will fail!."
+            exit
+        }
 
 
         # Link the GPO to the domain (or specific OU)
