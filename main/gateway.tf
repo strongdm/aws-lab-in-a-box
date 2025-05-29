@@ -56,13 +56,13 @@ resource "aws_iam_policy" "secrets_manager_policy" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = "secretsmanager:GetSecretValue"
+        Action   = ["secretsmanager:GetSecretValue","secretsmanager:CreateSecret","secretsmanager:DeleteSecret","secretsmanager:DescribeSecret","secretsmanager:ListSecret","secretsmanager:PutSecretValue","secretsmanager:UpdateSecret"]
         Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:ResourceTag/${var.secretkey}" = "${var.secretvalue}" # Only allows reading secrets with this tag
-          }
-        }
+        #Condition = {
+        #  StringEquals = {
+        #    "aws:ResourceTag/${var.secretkey}" = "${var.secretvalue}" # Only allows reading secrets with this tag
+        #  }
+      #  }
       }
     ]
   })

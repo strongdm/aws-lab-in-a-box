@@ -19,6 +19,7 @@ resource "sdm_node" "relay" {
     tags = merge(var.tagset, {
       network = "Private"
       class   = "sdminfra"
+      "eng__${var.name}AD" = true
       }
     )
   }

@@ -28,6 +28,31 @@ create_linux_target = true
 #Create an DocumentDB Replicaset Cluster Target
 #create_documentdb = true
 
+#Onboard domain users to be managed by StrongDM
+#create_managedsecrets = true
+
+
 #Allow to access secrets with this key/value
 secretkey = "sdm-owner"
 secretvalue = "nico.corrarello@strongdm.com"
+
+domain_users = [ 
+    {
+      "SamAccountName" = "jdoe"
+      "GivenName"      = "Jane"
+      "Surname"        = "Doe"
+      "tags"           = {mfa = "true"}
+    },
+    {
+      "SamAccountName" = "nchandler"
+      "GivenName"      = "Noah"
+      "Surname"        = "Chandler"
+      "tags"           = {justify = "true"}
+    },
+    {
+      "SamAccountName" = "eyang"
+      "GivenName"      = "Eva"
+      "Surname"        = "Yang"
+      "tags"           = {owner = "eva.yang@strongdm.com"}
+    }
+]
