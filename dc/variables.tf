@@ -54,6 +54,17 @@ resource "random_password" "admin_password" {
   min_lower   = 1      # Ensure at least one lowercase letter
 }
 
+variable "domain_users" {
+  description = "Set of map of users to be created in the Directory"
+  type        = set(object({
+    SamAccountName = string
+    GivenName      = string
+    Surname        = string
+    tags           = map(string)
+    }))
+  default     = null
+}
+
 # Local variables for module operation
 locals {
   admin_password = random_password.admin_password.result
@@ -71,4 +82,9 @@ locals {
     Name    = "sdm-${var.name}-domain-controller"
     }
   )  
+}
+
+variable "rdpca" {
+  description = "RDP CA to import into the domain controller"
+  type = string
 }

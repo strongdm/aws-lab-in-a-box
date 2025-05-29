@@ -135,3 +135,21 @@ variable "region" {
   type        = string
   default     = "us-east-2" // Default region if none specified
 }
+
+#---------- Secrets Management Configuration ----------#
+variable "domain_users" {
+  description = "Set of map of users to be created in the Directory"
+  type        = set(object({
+    SamAccountName = string
+    GivenName      = string
+    Surname        = string
+    tags           = map(string)
+    }))
+  default     = null
+}
+
+variable "create_managedsecrets" {
+  description = "Create an access profile for StrongDM users in AWS with Full S3 Permissions"
+  type        = bool
+  default     = false
+}

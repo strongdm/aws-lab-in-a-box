@@ -22,6 +22,8 @@ module "dc" {
   name      = var.name                                                        # Name prefix for resources and domain name
   subnet_id = coalesce(var.relay_subnet, one(module.network[*].relay_subnet)) # Private subnet
   sg        = coalesce(var.public_sg, module.network[0].private_sg)           # Security group
+  rdpca     = data.sdm_rdp_ca_pubkey.rdp_pubkey_query.public_key
+  domain_users = var.domain_users                                             # Set of additional domain users to be created
 }
 
 # Register the domain controller as an RDP resource in StrongDM for administrative access

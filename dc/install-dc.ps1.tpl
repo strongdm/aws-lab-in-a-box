@@ -106,6 +106,25 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         Add-ADGroupMember -Identity "Domain Admins" -Members "domainadmin"
 
         Write-Host "Active Directory domain $domain has been created, and the domain admin user $adminUsername has been created and added to the Domain Admins group."
+        %{ if try(domain_users) != null }
+        %{ for user in domain_users ~}
+            $currentUserParams = @{
+            SamAccountName = "${user.SamAccountName}"
+            Name           = "${user.GivenName} ${user.Surname}"
+            GivenName      = "${user.GivenName}"
+            Surname        = "${user.Surname}"
+            DisplayName    = "${user.GivenName} ${user.Surname}"
+            UserPrincipalName = "${user.SamAccountName}@${name}.local"
+            AccountPassword = $domainadminpass
+            Enabled        = $true
+            PasswordNeverExpires = $true
+            }
+            New-ADUser @currentUserParams
+            Add-ADGroupMember -Identity "Domain Users" -Members "${user.SamAccountName}" 
+            "Active Directory User ${user.SamAccountName} has been created"
+        %{ endfor ~}
+        %{ endif }
+
         # Define GPO name and domain settings
         $GPOName = "Disable NLA and Enable Smart Card Authentication"
         $Domain = "DC=${name},DC=local"

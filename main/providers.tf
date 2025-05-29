@@ -10,9 +10,6 @@
 # - External providers for helper functionality
 #--------------------------------------------------------------
 
-# StrongDM Provider - Must be configured via environment variables:
-# SDM_API_ACCESS_KEY and SDM_API_SECRET_KEY
-provider "sdm" {}
 
 # AWS Provider - Uses the region variable and standard AWS authentication methods
 provider "aws" {
@@ -27,7 +24,7 @@ terraform {
     }
     sdm = {
       source  = "strongdm/sdm"
-      version = ">=3.3.0" # Requires StrongDM provider v3.3.0+ for all features
+      version = ">=14.20.0" # Requires StrongDM provider v14.13.0+ for all features
     }
     external = {
       source = "hashicorp/external" # Used for external data sources and commands
