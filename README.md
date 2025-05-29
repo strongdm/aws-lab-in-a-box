@@ -36,7 +36,9 @@ The lab environment creates a secure network architecture with:
 
 In addition to the usual access credentials for AWS, the modules require an access key to StrongDM with the following privileges:
 
- ![StrongDM Permissions](doc/strongdm-permissions.png?raw=true)
+```bash
+sdm admin tokens add TerraformSecMgmt --permissions secretstore:list,secretstore:create,secretstore:update,secretstore:delete,organization:view_settings,relay:list,relay:create,policy:read,policy:write,datasource:list,datasource:create,datasource:update,datasource:delete,datasource:healthcheck,resourcelock:delete,resourcelock:list,accessrequest:requester,secretengine:create,secretengine:list,secretengine:delete,secretengine:update,managedsecret:list,managedsecret:update,managedsecret:create,managedsecret:read,managedsecret:delete --duration 648000 --type api
+```
 
 Export the environment variables:
 
@@ -70,7 +72,11 @@ Make sure you're logged into sdm with:
 ```bash
 sdm login
 ```
-This is especially important if you're using the Windows CA target, as it will use the local process to pull the Windows CA Certificate.
+This is important if you're using the Windows CA target on versions under 2.0, as it will use the local process to pull the Windows CA Certificate. 
+
+> [!Info]
+> As of version 2.0 of the lab, this has now been replaced by a new purpose built SDM Resource. Leaving here for historical purposes.
+> 
 
 ## Configuration Variables
 
@@ -119,6 +125,8 @@ Set-ExecutionPolicy Bypass
 ```
 
 ## Windows Target Considerations
+
+
 
 Setting up a domain controller takes several reboots. This is implemented by a persistent PowerShell script that runs at each reboot and has flow control through creating some "flag files" in C:\ with the "done" extension as each step is completed. You can reference the full PowerShell script [here](dc/install-dc.ps1.tpl).
 
