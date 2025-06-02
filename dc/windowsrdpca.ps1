@@ -1,3 +1,21 @@
+#--------------------------------------------------------------
+# Windows RDP Certificate Authority PowerShell Script
+#--------------------------------------------------------------
+# This PowerShell script extracts the StrongDM RDP Certificate Authority
+# certificate for Windows environments and formats it as JSON.
+# 
+# Key Functions:
+# - Validates that SDM CLI is available and accessible
+# - Retrieves RDP CA certificate from StrongDM admin CLI
+# - Formats certificate data as JSON for Terraform consumption
+# - Provides error handling for missing dependencies
+#
+# Dependencies:
+# - sdm CLI tool must be installed and authenticated
+# - PowerShell execution policy must allow script execution
+# - Proper StrongDM admin permissions for certificate access
+#--------------------------------------------------------------
+
 try {
     $sdmCommand = Get-Command sdm -ErrorAction Stop
 } catch {

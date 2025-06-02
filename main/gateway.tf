@@ -56,13 +56,13 @@ resource "aws_iam_policy" "secrets_manager_policy" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue","secretsmanager:CreateSecret","secretsmanager:DeleteSecret","secretsmanager:DescribeSecret","secretsmanager:ListSecret","secretsmanager:PutSecretValue","secretsmanager:UpdateSecret"]
+        Action   = ["secretsmanager:GetSecretValue", "secretsmanager:CreateSecret", "secretsmanager:DeleteSecret", "secretsmanager:DescribeSecret", "secretsmanager:ListSecret", "secretsmanager:PutSecretValue", "secretsmanager:UpdateSecret"]
         Resource = "*"
         #Condition = {
         #  StringEquals = {
         #    "aws:ResourceTag/${var.secretkey}" = "${var.secretvalue}" # Only allows reading secrets with this tag
         #  }
-      #  }
+        #  }
       }
     ]
   })
@@ -129,7 +129,7 @@ resource "aws_instance" "gateway" {
   key_name                    = aws_key_pair.gateway.key_name
 
   # Bootstrap the gateway using the provisioning template
-  user_data = templatefile("gw-provision.tpl", {
+  user_data = templatefile("${path.module}/gw-provision.tpl", {
     sdm_relay_token = sdm_node.gateway.gateway[0].token # Token for gateway registration
     target_user     = "ubuntu"                          # User to run the gateway service
     sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")

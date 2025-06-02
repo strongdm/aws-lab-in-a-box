@@ -1,4 +1,18 @@
 #!/usr/bin/env bash
+#--------------------------------------------------------------
+# Linux Target SSH CA Provisioning Script
+#
+# This script configures a Linux target for SSH certificate-based
+# authentication with StrongDM. It sets up the SSH CA public key
+# and configures SSH to trust certificates signed by StrongDM's
+# certificate authority, eliminating the need for password or
+# key-based authentication.
+#
+# Key operations:
+# - Installs the StrongDM SSH CA public key
+# - Configures SSH to accept certificate authentication
+# - Sets up proper permissions and SSH configuration
+#--------------------------------------------------------------
 
 export TARGET_USER=${target_user}
 apt-get update -y | logger -t sdminstall

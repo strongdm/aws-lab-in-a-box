@@ -24,13 +24,13 @@ resource "aws_instance" "dc" {
   key_name               = aws_key_pair.windows.key_name
   vpc_security_group_ids = [var.sg]
   subnet_id              = var.subnet_id
-  
+
   # Deploy the PowerShell script that sets up the domain controller
-  user_data              = templatefile("../dc/install-dc.ps1.tpl", {
+  user_data = templatefile("${path.module}/install-dc.ps1.tpl", {
     name     = var.name
     password = random_password.admin_password.result
     rdpca    = var.rdpca
-    
+
     domain_users = var.domain_users
     }
   )
@@ -58,7 +58,7 @@ resource "tls_private_key" "windows" {
 resource "aws_key_pair" "windows" {
   key_name   = "${var.name}-windows-key"
   public_key = tls_private_key.windows.public_key_openssh
-  tags = local.thistagset
+  tags       = local.thistagset
 }
 
 

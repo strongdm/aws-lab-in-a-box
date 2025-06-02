@@ -1,3 +1,22 @@
+#--------------------------------------------------------------
+# Windows Domain Join PowerShell Template
+#--------------------------------------------------------------
+# This PowerShell template script configures Windows instances to
+# join an Active Directory domain in the StrongDM AWS Lab-in-a-Box.
+# 
+# Key Functions:
+# - Disables Network Level Authentication (NLA) for RDP access
+# - Configures DNS settings to point to domain controller
+# - Joins the Windows instance to the specified AD domain
+# - Creates local domain administrator account
+# - Sets up proper domain authentication
+#
+# Template Variables:
+# - ${dc_ip}: IP address of the domain controller
+# - ${name}: Domain name prefix
+# - ${domain_password}: Domain administrator password
+#--------------------------------------------------------------
+
 <powershell>
 Start-Transcript -Path "C:\SDMDomainSetup.log" -Append
 "Disable NLA"
