@@ -15,15 +15,15 @@
 
 # Create the domain controller using the dc module
 module "dc" {
-  source    = "../dc"                                                         # Reference to the domain controller module
-  count     = var.create_domain_controller == false ? 0 : 1                   # Conditionally create based on feature flag
-  ami       = data.aws_ami.windows.id                                         # Windows Server AMI defined in amis.tf
-  tagset    = var.tagset                                                      # Tags for resource identification
-  name      = var.name                                                        # Name prefix for resources and domain name
-  subnet_id = coalesce(var.relay_subnet, one(module.network[*].relay_subnet)) # Private subnet
-  sg        = coalesce(var.public_sg, module.network[0].private_sg)           # Security group
-  rdpca     = data.sdm_rdp_ca_pubkey.rdp_pubkey_query.public_key
-  domain_users = var.domain_users                                             # Set of additional domain users to be created
+  source       = "../dc"                                                         # Reference to the domain controller module
+  count        = var.create_domain_controller == false ? 0 : 1                   # Conditionally create based on feature flag
+  ami          = data.aws_ami.windows.id                                         # Windows Server AMI defined in amis.tf
+  tagset       = var.tagset                                                      # Tags for resource identification
+  name         = var.name                                                        # Name prefix for resources and domain name
+  subnet_id    = coalesce(var.relay_subnet, one(module.network[*].relay_subnet)) # Private subnet
+  sg           = coalesce(var.public_sg, module.network[0].private_sg)           # Security group
+  rdpca        = data.sdm_rdp_ca_pubkey.rdp_pubkey_query.public_key
+  domain_users = var.domain_users # Set of additional domain users to be created
 }
 
 # Register the domain controller as an RDP resource in StrongDM for administrative access

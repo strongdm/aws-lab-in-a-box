@@ -1,16 +1,17 @@
-// filepath: /Users/stokvis/dev/sdm/aws-lab-in-a-box/main/docdb-target.tf
-
-#-------------------------------------------------------
-# DocumentDB Integration with StrongDM
+#--------------------------------------------------------------
+# DocumentDB Target Configuration
 #
-# This file integrates the DocumentDB module with StrongDM,
-# creating a secure access pathway to MongoDB-compatible 
-# database instances. It demonstrates how to:
+# This file creates an Amazon DocumentDB cluster in AWS and registers it with
+# StrongDM for secure database access. DocumentDB provides MongoDB-compatible
+# database capabilities and demonstrates StrongDM's ability to manage access
+# to NoSQL databases without sharing credentials directly with users.
 #
-# 1. Create the underlying DocumentDB infrastructure
-# 2. Register it as a target resource in StrongDM
-# 3. Configure authentication via StrongDM
-#-------------------------------------------------------
+# Components:
+# - DocumentDB cluster with MongoDB compatibility
+# - Private subnet deployment for security
+# - StrongDM resource registration for secure access
+# - Integration with AWS Secrets Manager for credentials
+#--------------------------------------------------------------
 
 # Create the DocumentDB cluster using our reusable module
 module "docdb-target" {
@@ -22,9 +23,10 @@ module "docdb-target" {
     coalesce(var.relay_subnet-b, one(module.network[*].relay_subnet-b)),
   coalesce(var.relay_subnet-c, one(module.network[*].relay_subnet-c))]
 
-  tagset = var.tagset                                            # Tags for resource identification
-  name   = var.name                                              # Name prefix for resources
-  sg     = coalesce(var.public_sg, module.network[0].private_sg) # Security group
+  tagset   = var.tagset # Tags for resource identification
+  name     = var.name
+  password = "supersecret"                                         # Name prefix for resources
+  sg       = coalesce(var.public_sg, module.network[0].private_sg) # Security group
 }
 
 # Register the DocumentDB cluster in StrongDM as a managed resource

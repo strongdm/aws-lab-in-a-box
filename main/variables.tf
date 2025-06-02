@@ -139,13 +139,13 @@ variable "region" {
 #---------- Secrets Management Configuration ----------#
 variable "domain_users" {
   description = "Set of map of users to be created in the Directory"
-  type        = set(object({
+  type = set(object({
     SamAccountName = string
     GivenName      = string
     Surname        = string
     tags           = map(string)
-    }))
-  default     = null
+  }))
+  default = null
 }
 
 variable "create_managedsecrets" {

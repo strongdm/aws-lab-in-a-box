@@ -26,7 +26,7 @@ create_linux_target = true
 #create_eks = true
 
 #Create an DocumentDB Replicaset Cluster Target
-#create_documentdb = true
+#create_docdb = true
 
 #Onboard domain users to be managed by StrongDM
 #create_managedsecrets = true

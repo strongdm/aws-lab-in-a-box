@@ -1,4 +1,13 @@
-output "vpc"{
+#--------------------------------------------------------------
+# Network Module Outputs
+#
+# This file defines the output values from the network module that other
+# modules and resources need to reference. These outputs provide network
+# identifiers and security group IDs for proper resource placement and
+# communication within the StrongDM lab environment.
+#--------------------------------------------------------------
+
+output "vpc" {
   value = aws_vpc.main.id
 }
 output "gateway_subnet" {
