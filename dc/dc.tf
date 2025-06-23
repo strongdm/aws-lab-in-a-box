@@ -26,7 +26,7 @@ resource "aws_instance" "dc" {
   subnet_id              = var.subnet_id
   
   # Deploy the PowerShell script that sets up the domain controller
-  user_data              = templatefile("../dc/install-dc.ps1.tpl", {
+  user_data              = templatefile("${path.module}/install-dc.ps1.tpl", {
     name     = var.name
     password = random_password.admin_password.result
     rdpca    = var.rdpca
