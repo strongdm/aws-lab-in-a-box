@@ -1,6 +1,6 @@
 module "secretsmgmt" {
   source       = "../secretsmgmt"
-  //count        = (try(var.domain_users) == false && var.create_managedsecrets == false && var.create_domain_controller == false) ? 0 : 1
+  //count        = (try(var.domain_users) == false || var.create_managedsecrets == false || var.create_domain_controller == false) ? 0 : 1
   for_each = { for index, user in (var.create_managedsecrets ? (coalesce(var.domain_users, [])) : [] ):
     user.SamAccountName => user
   }
@@ -13,7 +13,7 @@ module "secretsmgmt" {
 }
 
 resource "sdm_secret_engine" "ad" {
-  count     = (try(var.domain_users) == false && var.create_managedsecrets == false && var.create_domain_controller == false) ? 0 : 1
+  count     = (try(var.domain_users) == false || var.create_managedsecrets == false || var.create_domain_controller == false) ? 0 : 1
   active_directory {
     binddn                 = "CN=Domain Admin,CN=Users,DC=${var.name},DC=local"
     bindpass               = one(module.dc[*].domain_password)
