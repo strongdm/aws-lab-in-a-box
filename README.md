@@ -52,17 +52,38 @@ $env:SDM_API_ACCESS_KEY="auth-xxxxxx888x8x88x8x6"
 $env:SDM_API_SECRET_KEY="X4fasfasfasfasfasfsafaaqED34ge5343CkQ"
 ```
 
-> [!NOTE]
-> If your control plane is in the UK, or the EU, make sure that the SDM_API_HOST variable is correctly set.
-> Gateways and relays *will* use this variable as well to register against the right tenant
+### StrongDM Control Plane Configuration
 
+> [!IMPORTANT]
+> **Set the correct control plane endpoint before deployment!**
+> 
+> The `SDM_API_HOST` environment variable must be set to match your StrongDM control plane region. 
+> This variable is used by both the Terraform provider and the gateway/relay nodes for registration.
+
+**For US Control Plane (default):**
+- No need to set `SDM_API_HOST` - it defaults to `api.strongdm.com:443`
+
+**For UK Control Plane:**
 ```bash
 export SDM_API_HOST=api.uk.strongdm.com:443
 ```
-or in Powershell:
+or in PowerShell:
 ```powershell
 $env:SDM_API_HOST="api.uk.strongdm.com:443"
 ```
+
+**For EU Control Plane:**
+```bash
+export SDM_API_HOST=api.eu.strongdm.com:443
+```
+or in PowerShell:
+```powershell
+$env:SDM_API_HOST="api.eu.strongdm.com:443"
+```
+
+> [!WARNING]
+> Setting the wrong control plane endpoint will cause gateway and relay registration to fail. 
+> Make sure this matches the region where your StrongDM organization is hosted.
 
 > [!NOTE]
 > The verification of the operating system is done based on the presence of "c:" in the module path. If there is no c:,
