@@ -22,15 +22,15 @@ resource "aws_docdb_subnet_group" "docdb_subnet_group" {
 # DocumentDB Cluster - Contains the storage and metadata for the database
 resource "aws_docdb_cluster" "docdb_cluster" {
   cluster_identifier      = "${var.name}-docdb-cluster"
-  engine                  = "docdb"                      # DocumentDB uses the docdb engine type
-  master_username         = var.username                 # Admin username for the cluster
-  master_password         = local.actual_password        # Admin password (auto-generated if not provided)
-  backup_retention_period = var.backup_retention_period  # How many days to retain backups
-  preferred_backup_window = var.preferred_backup_window  # When to perform backups
-  skip_final_snapshot     = true                         # Skip final snapshot on deletion for lab env
+  engine                  = "docdb"                     # DocumentDB uses the docdb engine type
+  master_username         = var.username                # Admin username for the cluster
+  master_password         = local.actual_password       # Admin password (auto-generated if not provided)
+  backup_retention_period = var.backup_retention_period # How many days to retain backups
+  preferred_backup_window = var.preferred_backup_window # When to perform backups
+  skip_final_snapshot     = true                        # Skip final snapshot on deletion for lab env
   db_subnet_group_name    = aws_docdb_subnet_group.docdb_subnet_group.name
-  vpc_security_group_ids  = [var.sg]                     # Security group to allow access
-  storage_encrypted       = true                         # Enable storage encryption
+  vpc_security_group_ids  = [var.sg] # Security group to allow access
+  storage_encrypted       = true     # Enable storage encryption
 
   tags = local.thistagset
 }
@@ -41,7 +41,7 @@ resource "aws_docdb_cluster_instance" "docdb_instances" {
   count              = var.replica_instance_count
   identifier         = "${var.name}-docdb-instance-${count.index}"
   cluster_identifier = aws_docdb_cluster.docdb_cluster.id
-  instance_class     = var.instance_class                # Instance size/performance tier
+  instance_class     = var.instance_class # Instance size/performance tier
 
   tags = local.thistagset
 }

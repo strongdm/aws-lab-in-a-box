@@ -8,7 +8,7 @@
 
 variable "subnet_id" {
   description = "Subnet id in which to deploy the system"
-  type        = list
+  type        = list(any)
   default     = null
 }
 

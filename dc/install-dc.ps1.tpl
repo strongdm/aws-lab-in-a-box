@@ -1,3 +1,23 @@
+#--------------------------------------------------------------
+# Domain Controller Installation PowerShell Template
+#--------------------------------------------------------------
+# This PowerShell template script installs and configures a Windows
+# Active Directory Domain Controller in the StrongDM AWS Lab-in-a-Box.
+# 
+# Key Functions:
+# - Installs Active Directory Domain Services (ADDS) role
+# - Installs DNS server role and configures DNS settings
+# - Creates new Active Directory forest and domain
+# - Configures domain controller networking and security
+# - Sets up RDP certificate authentication
+# - Creates domain users and organizational structure
+# - Configures StrongDM integration with Active Directory
+#
+# Template Variables:
+# - ${rdpca}: RDP certificate authority certificate
+# - ${name}: Domain name prefix for forest creation
+#--------------------------------------------------------------
+
 <powershell>
 Start-Transcript -Path "C:\SDMDomainSetup.log" -Append
 

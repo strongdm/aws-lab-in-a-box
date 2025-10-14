@@ -1,3 +1,12 @@
+#--------------------------------------------------------------
+# Network Module Variables
+#
+# This file defines the input variables for the network module, which creates
+# the foundational networking infrastructure for the StrongDM lab environment.
+# Variables control VPC configuration, subnet deployment, security groups,
+# and feature flags that determine which security group rules to create.
+#--------------------------------------------------------------
+
 variable "vpc" {
   description = "Use an existing VPC. If nil a new VPC will be created"
   type        = string

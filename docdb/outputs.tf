@@ -1,10 +1,11 @@
-#-------------------------------------------------------
+#--------------------------------------------------------------
 # DocumentDB Module Outputs
 #
-# These outputs expose important information about the 
-# DocumentDB cluster for use by other modules, particularly
-# for configuring StrongDM resources.
-#-------------------------------------------------------
+# This file defines the output values from the DocumentDB module that other
+# modules and resources need to reference. These outputs provide connection
+# endpoints, credentials, and resource identifiers needed for StrongDM
+# integration and database access configuration.
+#--------------------------------------------------------------
 
 output "docdb_endpoint" {
   description = "Endpoint for the DocumentDB cluster (writer instance)"
@@ -29,7 +30,7 @@ output "docdb_username" {
 output "docdb_password" {
   description = "Password for the DocumentDB cluster (auto-generated or user-provided)"
   value       = local.actual_password
-  sensitive   = true  # Marked as sensitive to prevent exposure in logs
+  sensitive   = true # Marked as sensitive to prevent exposure in logs
 }
 
 output "thistagset" {

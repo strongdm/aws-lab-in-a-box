@@ -17,8 +17,8 @@ resource "sdm_node" "relay" {
   relay {
     name = "sdm-${var.name}-lab-r" # Relay name visible in StrongDM
     tags = merge(var.tagset, {
-      network = "Private"
-      class   = "sdminfra"
+      network              = "Private"
+      class                = "sdminfra"
       "eng__${var.name}AD" = true
       }
     )
@@ -36,7 +36,7 @@ resource "aws_instance" "relay" {
   iam_instance_profile = aws_iam_instance_profile.gw_instance_profile.name
 
   # Bootstrap the relay using the same provisioning template as gateway
-  user_data = templatefile("gw-provision.tpl", {
+  user_data = templatefile("${path.module}/gw-provision.tpl", {
     sdm_relay_token = sdm_node.relay.relay[0].token # Token for relay registration
     target_user     = "ubuntu"                      # User to run the relay service
     sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
