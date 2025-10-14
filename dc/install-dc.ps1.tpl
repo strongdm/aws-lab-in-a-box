@@ -18,7 +18,6 @@
 # - ${name}: Domain name prefix for forest creation
 #--------------------------------------------------------------
 
-<powershell>
 Start-Transcript -Path "C:\SDMDomainSetup.log" -Append
 
 "${rdpca}" | Out-File "C:\rdp.cer"
@@ -226,6 +225,3 @@ if (((-not (Test-Path "C:\addssetup.done")) -and (Test-Path "C:\addsinstall.done
     Restart-Computer -Force
 }
 
-
-</powershell>
-<persist>true</persist>
