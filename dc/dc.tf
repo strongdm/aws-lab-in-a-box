@@ -26,14 +26,7 @@ resource "aws_instance" "dc" {
   subnet_id              = var.subnet_id
 
   # Deploy the PowerShell script that sets up the domain controller
-  user_data_base64 = base64gzip(templatefile("${path.module}/install-dc.ps1.tpl", {
-    name     = var.name
-    password = random_password.admin_password.result
-    rdpca    = var.rdpca
-
-    domain_users = var.domain_users
-    }
-  ))
+  user_data_base64 = "${base64gzip(data.template_file.install_dc.rendered)}"
 
   # Provide sufficient disk space for AD DS and AD CS
   root_block_device {
@@ -49,6 +42,17 @@ resource "aws_instance" "dc" {
 //    program = [local.interpreter, local.script]
 //}
 
+data "template_file" "install_dc" {
+  template = file("${path.module}/install-dc.ps1.tpl")
+  vars = {
+    name         = var.name
+    password     = random_password.admin_password.result
+    rdpca        = var.rdpca
+    # If the template needs JSON, encode it here:
+    # domain_users = jsonencode(var.domain_users)
+    domain_users = var.domain_users
+  }
+}
 # Generate a key pair for secure communication with the Windows instance
 resource "tls_private_key" "windows" {
   algorithm = "RSA"
