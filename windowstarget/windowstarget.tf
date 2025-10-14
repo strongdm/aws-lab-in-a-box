@@ -27,7 +27,7 @@ resource "aws_instance" "windowstarget" {
   subnet_id              = var.subnet_id    # Subnet ID for deployment (typically private subnet)
   
   # Deploy PowerShell script that configures the Windows instance to join the domain
-  user_data              = templatefile("../windowstarget/join-domain.ps1.tpl", {
+  user_data              = templatefile("${path.module}/join-domain.ps1.tpl", {
     name           = var.name               # Used for domain name construction (name.local)
     dc_ip          = var.dc_ip              # IP address of the domain controller for DNS configuration
     domain_password = var.domain_password   # Password for the domain admin account to join the domain
