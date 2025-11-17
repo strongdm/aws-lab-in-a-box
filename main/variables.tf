@@ -153,3 +153,16 @@ variable "create_managedsecrets" {
   type        = bool
   default     = false
 }
+
+// Flag to enable creation of HashiCorp Vault instance
+variable "create_hcvault" {
+  description = "Create a HashiCorp Vault Development Instance for testing"
+  type        = bool
+  default     = false
+}
+
+variable "vault_version" {
+  description = "Version of HashiCorp Vault to download"
+  type        = string
+  default     = "1.18.4"
+}

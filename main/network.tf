@@ -23,6 +23,7 @@ module "network" {
   create_domain_controller = var.create_domain_controller
   create_windows_target    = var.create_windows_target
   create_linux_target      = var.create_linux_target
+  create_hcvault           = var.create_hcvault
   tagset                   = var.tagset
   name                     = var.name
 }

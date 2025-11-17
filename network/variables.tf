@@ -58,3 +58,9 @@ variable "create_linux_target" {
   type        = bool
   default     = false
 }
+
+variable "create_hcvault" {
+  description = "Flag to create a HashiCorp Vault"
+  type        = bool
+  default     = false
+}

@@ -133,6 +133,11 @@ resource "aws_instance" "gateway" {
     sdm_relay_token = sdm_node.gateway.gateway[0].token # Token for gateway registration
     target_user     = "ubuntu"                          # User to run the gateway service
     sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
+    create_hcvault  = "false" # The gateway never needs to know about Vault
+    vault_version   = ""
+    vault_url       = ""
+    aws_region      = data.aws_region.current.name
+
   })
 
   tags = merge(var.tagset, {
