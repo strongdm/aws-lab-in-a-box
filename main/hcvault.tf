@@ -32,6 +32,21 @@ resource "sdm_secret_store" "hcvault" {
     vault_token {
         name = "HashiCorp Vault ${var.name}"
         tags = var.tagset
+        
         server_address = "http://${one(module.hcvault[*].ip)}:8200"
+    }
+}
+
+resource "sdm_secret_store" "vault-ssh-ca" {
+    count = var.create_hcvault == false ? 0 : 1
+    vault_token_cert_ssh {
+        name            = "HashiCorp Vault SSH ${var.name}"
+        signing_role    = "client"
+        ssh_mount_point = "ssh"
+        tags            = var.tagset
+
+        server_address          = "http://${one(module.hcvault[*].ip)}:8200"    
+        issued_cert_ttl_minutes = "5"
+
     }
 }

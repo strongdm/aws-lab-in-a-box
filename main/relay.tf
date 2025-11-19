@@ -10,6 +10,12 @@
 # - EC2 instance running the StrongDM Relay service
 # - Network configuration for private subnet communication
 # - SSH access for administrative purposes
+#
+# IMPORTANT: Relay tokens are single-use only.
+# To recreate both the SDM node and EC2 instance with a fresh token:
+#   terraform taint 'sdm_node.relay'
+#   terraform taint 'aws_instance.relay'
+# Or use: terraform destroy -target=sdm_node.relay -target=aws_instance.relay && terraform apply
 #--------------------------------------------------------------
 
 # Create a StrongDM relay node in the control plane
@@ -43,7 +49,7 @@ resource "aws_instance" "relay" {
     create_hcvault  = var.create_hcvault
     vault_url       = var.create_hcvault ? one(module.hcvault[*].vault_url) : ""
     aws_region      = data.aws_region.current.name
-    vault_version   = var.create_hcvault ? one(var.vault_version) : ""
+    vault_version   = var.create_hcvault ? var.vault_version : ""
   })
 
   # Use a dedicated network interface in the private subnet

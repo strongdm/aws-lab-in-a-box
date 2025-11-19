@@ -10,6 +10,12 @@
 # - IAM role with Secrets Manager access permissions
 # - EC2 instance running the StrongDM Gateway service
 # - Network configuration for public internet access
+#
+# IMPORTANT: Gateway tokens are single-use only.
+# To recreate both the SDM node and EC2 instance with a fresh token:
+#   terraform taint 'sdm_node.gateway'
+#   terraform taint 'aws_instance.gateway'
+# Or use: terraform destroy -target=sdm_node.gateway -target=aws_instance.gateway && terraform apply
 #--------------------------------------------------------------
 
 # Elastic IP for the gateway to ensure a stable public endpoint
