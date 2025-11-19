@@ -134,6 +134,8 @@ Setting up a domain controller takes several reboots. This is implemented by a p
 
 Note that you cannot deploy the "Windows target" until the domain controller is up and running.
 
+As per Microsoft [KB5014754](https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16) the SID must be added for users or Identity Aliases manually at this point.
+
 ## Training Scenarios
 
 This lab environment supports various training scenarios:
