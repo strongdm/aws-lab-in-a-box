@@ -31,3 +31,8 @@ output "thistagset" {
   value       = local.thistagset
   description = "Tags applied to the Windows target, used for consistent resource management"
 }
+
+output "instance_id" {
+  value       = aws_instance.windowstarget.id
+  description = "EC2 instance ID of the Windows target"
+}

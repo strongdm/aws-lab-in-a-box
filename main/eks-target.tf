@@ -36,6 +36,8 @@ resource "sdm_resource" "eks" {
     name                  = "${var.name}-eks-cluster"              # Resource name in StrongDM
     cluster_name          = module.eks[0].name                     # EKS cluster name
     region                = data.aws_region.current.name           # AWS region
-    tags                  = module.eks[0].thistagset               # Tags for access control
+    tags                  = merge(module.eks[0].thistagset, {
+      sdm__cloud_id = module.eks[0].cluster_id
+    })
   }
 }

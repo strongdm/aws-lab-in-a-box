@@ -34,7 +34,9 @@ resource "sdm_resource" "ssh-ca-target" {
     hostname = one(module.linux-target[*].target_hostname) # Private IP of the target
     username = one(module.linux-target[*].target_username) # User configured for access
     port     = 22                                          # Standard SSH port
-    tags     = one(module.linux-target[*].thistagset)      # Tags for access control
+    tags     = merge(one(module.linux-target[*].thistagset), {
+      sdm__cloud_id = one(module.linux-target[*].instance_id)
+    })
 
   }
 }

@@ -41,6 +41,8 @@ resource "sdm_resource" "rds-psql-target" {
     password        = "${one(module.psql-target[*].secret_arn)}?key=password" # Password from Secrets Manager
     secret_store_id = sdm_secret_store.awssecretsmanager.id                   # Reference to the StrongDM secret store
 
-    tags = one(module.psql-target[*].thistagset) # Tags for access control
+    tags = merge(one(module.psql-target[*].thistagset), {
+      sdm__cloud_id = one(module.psql-target[*].instance_id)
+    })
   }
 }

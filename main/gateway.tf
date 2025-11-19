@@ -80,6 +80,38 @@ resource "aws_iam_role_policy_attachment" "attach_secrets_manager_policy" {
   policy_arn = aws_iam_policy.secrets_manager_policy.arn
 }
 
+# Attach AWS managed policy for EC2 read-only access
+resource "aws_iam_role_policy_attachment" "attach_ec2_readonly_policy" {
+  role       = aws_iam_role.gateway.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+}
+
+# Attach AWS managed policy for RDS read-only access
+resource "aws_iam_role_policy_attachment" "attach_rds_readonly_policy" {
+  role       = aws_iam_role.gateway.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess"
+}
+
+# Custom inline policy for EKS cluster discovery
+resource "aws_iam_role_policy" "eks_describe_policy" {
+  name = "${var.name}-eks-describe-policy"
+  role = aws_iam_role.gateway.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 
 # Instance Profile to attach to the EC2 instance
 resource "aws_iam_instance_profile" "gw_instance_profile" {
@@ -112,6 +144,8 @@ resource "sdm_resource" "gateway" {
     tags = merge(var.tagset, {
       network = "Public"
       class   = "sdminfra"
+      # Note: Cannot add sdm__cloud_id here due to circular dependency:
+      # sdm_resource generates SSH key → aws_key_pair uses it → aws_instance uses key_pair
       }
     )
 

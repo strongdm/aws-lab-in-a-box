@@ -37,3 +37,8 @@ output "thistagset" {
   description = "Tags applied to DocumentDB resources (used by StrongDM resource definitions)"
   value       = local.thistagset
 }
+
+output "cluster_id" {
+  description = "DocumentDB cluster identifier"
+  value       = aws_docdb_cluster.docdb_cluster.id
+}

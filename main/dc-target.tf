@@ -36,6 +36,8 @@ resource "sdm_resource" "dc" {
     password = one(module.dc[*].dc_password)   # Local administrator password
 
     port = 3389                         # Standard RDP port
-    tags = one(module.dc[*].thistagset) # Tags for access control
+    tags = merge(one(module.dc[*].thistagset), {
+      sdm__cloud_id = one(module.dc[*].instance_id)
+    })
   }
 }

@@ -40,6 +40,8 @@ resource "sdm_resource" "docdb-target" {
     password      = one(module.docdb-target[*].docdb_password) # Admin password
     auth_database = "admin"                                    # Default authentication database
     replica_set   = "rs0"                                      # Default replica set name
-    tags          = one(module.docdb-target[*].thistagset)     # Apply consistent tagging
+    tags          = merge(one(module.docdb-target[*].thistagset), {
+      sdm__cloud_id = one(module.docdb-target[*].cluster_id)
+    })
   }
 }

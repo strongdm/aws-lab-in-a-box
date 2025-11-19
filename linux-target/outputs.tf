@@ -20,3 +20,8 @@ output "thistagset" {
   value       = local.thistagset
   description = "Tags applied to the Linux target, used for consistent resource management"
 }
+
+output "instance_id" {
+  value       = aws_instance.ssh-target.id
+  description = "EC2 instance ID of the Linux target"
+}

@@ -89,6 +89,8 @@ resource "sdm_resource" "relay" {
     tags = merge(var.tagset, {
       network = "Public" # Note: Using public tag to make visible, even though the resource is private
       class   = "sdminfra"
+      # Note: Cannot add sdm__cloud_id here due to circular dependency:
+      # sdm_resource generates SSH key → aws_key_pair uses it → aws_instance uses key_pair
       }
     )
   }

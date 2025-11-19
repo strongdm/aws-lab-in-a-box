@@ -22,7 +22,9 @@ resource "sdm_resource" "ssh-hcvault" {
         hostname = one(module.hcvault[*].ip)
         username = one(module.hcvault[*].target_user)
         port     = 22
-        tags = one(module.hcvault[*].tagset)
+        tags = merge(one(module.hcvault[*].tagset), {
+          sdm__cloud_id = one(module.hcvault[*].instance_id)
+        })
 
     }
 }

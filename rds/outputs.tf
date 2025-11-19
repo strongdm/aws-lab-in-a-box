@@ -31,3 +31,8 @@ output "thistagset" {
   value       = local.thistagset
   description = "Tags applied to the PostgreSQL instance, used for consistent resource management"
 }
+
+output "instance_id" {
+  value       = aws_db_instance.rds_target.id
+  description = "RDS instance identifier"
+}

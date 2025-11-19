@@ -58,3 +58,8 @@ output "key_name" {
   value       = aws_key_pair.windows.key_name
   description = "The name of the key pair created for Windows instances"
 }
+
+output "instance_id" {
+  value       = aws_instance.dc.id
+  description = "The EC2 instance ID of the domain controller"
+}

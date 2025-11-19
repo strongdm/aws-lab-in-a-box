@@ -31,6 +31,11 @@ output "thistagset" {
   value       = local.thistagset
 }
 
+output "cluster_id" {
+  description = "EKS cluster identifier"
+  value       = aws_eks_cluster.eks.id
+}
+
 # Commented out legacy output - keeping for reference
 #output "role" {
 #  description = "The IAM role ARN for EKS access"
