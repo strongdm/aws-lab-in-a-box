@@ -40,3 +40,6 @@ id_rsa*
 
 # Environment files
 .env
+
+# Claude Code files
+CLAUDE.md

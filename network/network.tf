@@ -211,6 +211,20 @@ resource "aws_vpc_security_group_ingress_rule" "allow_windows" {
   })
 }
 
+resource "aws_vpc_security_group_ingress_rule" "allow_hcvault" {
+  count             = var.create_hcvault ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 8200
+  ip_protocol       = "tcp"
+  to_port           = 8200
+  
+  tags = merge (var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
 resource "aws_vpc_security_group_ingress_rule" "allow_dns_udp" {
   count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
   security_group_id = aws_security_group.relay.id
@@ -431,8 +445,8 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.gateway.id
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.gateway.id
   }
 
   tags = {

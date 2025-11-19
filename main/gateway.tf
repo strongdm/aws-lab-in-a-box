@@ -10,6 +10,12 @@
 # - IAM role with Secrets Manager access permissions
 # - EC2 instance running the StrongDM Gateway service
 # - Network configuration for public internet access
+#
+# IMPORTANT: Gateway tokens are single-use only.
+# To recreate both the SDM node and EC2 instance with a fresh token:
+#   terraform taint 'sdm_node.gateway'
+#   terraform taint 'aws_instance.gateway'
+# Or use: terraform destroy -target=sdm_node.gateway -target=aws_instance.gateway && terraform apply
 #--------------------------------------------------------------
 
 # Elastic IP for the gateway to ensure a stable public endpoint
@@ -133,6 +139,11 @@ resource "aws_instance" "gateway" {
     sdm_relay_token = sdm_node.gateway.gateway[0].token # Token for gateway registration
     target_user     = "ubuntu"                          # User to run the gateway service
     sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
+    create_hcvault  = "false" # The gateway never needs to know about Vault
+    vault_version   = ""
+    vault_url       = ""
+    aws_region      = data.aws_region.current.name
+
   })
 
   tags = merge(var.tagset, {
