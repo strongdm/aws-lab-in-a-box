@@ -12,7 +12,7 @@
 
 # Create a role that can be assumed by both EC2 service and the gateway role
 resource "aws_iam_role" "ec2_read_only_role" {
-  name               = "EC2ReadOnlyRole"
+  name               = "${var.name}-EC2ReadOnlyRole"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role_policy.json
   tags               = var.tagset
 }

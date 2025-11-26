@@ -1,5 +1,5 @@
 resource "aws_iam_role" "s3_full_role" {
-  name               = "S3FullRole"
+  name               = "${var.name}-S3FullRole"
   assume_role_policy = data.aws_iam_policy_document.s3f_assume_role_policy.json
   tags = var.tagset
 }

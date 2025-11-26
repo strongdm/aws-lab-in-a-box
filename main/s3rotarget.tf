@@ -1,6 +1,7 @@
 module "s3ro" {
     source      = "../s3ro"
     count       = var.create_aws_s3ro == false ? 0 : 1
+    name        = var.name
     tagset      = var.tagset
     role        = aws_iam_role.gateway.arn
 

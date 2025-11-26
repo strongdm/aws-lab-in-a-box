@@ -5,6 +5,11 @@
 # which creates IAM roles and policies for secure AWS resource access via StrongDM.
 #--------------------------------------------------------------
 
+variable "name" {
+  description = "Arbitrary string to add to resources for identification and uniqueness"
+  type        = string
+}
+
 variable "tagset" {
   description = "Set of Tags to apply to StrongDM resources"
   type        = map(string)

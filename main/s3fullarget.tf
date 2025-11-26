@@ -1,6 +1,7 @@
 module "s3full" {
     source      = "../s3full"
     count       = var.create_aws_s3full == false ? 0 : 1
+    name        = var.name
     tagset      = var.tagset
     role        = aws_iam_role.gateway.arn
 

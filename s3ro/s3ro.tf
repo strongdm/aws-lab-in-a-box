@@ -1,5 +1,5 @@
 resource "aws_iam_role" "s3_read_only_role" {
-  name               = "S3ReadOnlyRole"
+  name               = "${var.name}-S3ReadOnlyRole"
   assume_role_policy = data.aws_iam_policy_document.s3_assume_role_policy.json
   tags = var.tagset
 }

@@ -16,6 +16,7 @@
 module "awsro" {
   source = "../awsro"                         # Reference to the AWS Read-Only module
   count  = var.create_aws_ro == false ? 0 : 1 # Conditionally create based on feature flag
+  name   = var.name                           # Name prefix for unique resource naming
   tagset = var.tagset                         # Tags for resource identification
   role   = aws_iam_role.gateway.arn           # Gateway role ARN for assume role permissions
 

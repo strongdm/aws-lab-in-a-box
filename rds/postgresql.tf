@@ -16,7 +16,7 @@
 # Create a PostgreSQL database instance with modern version and secure configuration
 resource "aws_db_instance" "rds_target" {
   instance_class              = "db.t3.micro"                       # Small instance suitable for demo purposes
-  identifier_prefix           = "lab"                               # Prefix for the RDS instance identifier
+  identifier                  = "${var.name}-postgres-db"           # Unique identifier for the RDS instance
   allocated_storage           = 5                                   # 5GB storage allocation is sufficient for demos
   engine                      = "postgres"                          # Use PostgreSQL database engine
   engine_version              = "16.3"                              # Use recent PostgreSQL version
@@ -32,8 +32,8 @@ resource "aws_db_instance" "rds_target" {
 
 # Create a database subnet group that spans multiple availability zones
 resource "aws_db_subnet_group" "rds_target" {
-  name       = "main"        # Subnet group name
-  subnet_ids = var.subnet_id # List of subnet IDs from variables
+  name       = "${var.name}-rds-subnet-group" # Subnet group name with unique prefix
+  subnet_ids = var.subnet_id                  # List of subnet IDs from variables
 
   tags = local.thistagset # Apply consistent tagging
 }

@@ -1,6 +1,7 @@
 module "gluefull" {
     source      = "../gluefull"
     count       = var.create_aws_gluefull == false ? 0 : 1
+    name        = var.name
     tagset      = var.tagset
     role        = aws_iam_role.gateway.arn
 
