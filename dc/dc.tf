@@ -51,6 +51,7 @@ locals {
     SamAccountName = user.SamAccountName
     GivenName      = user.GivenName
     Surname        = user.Surname
+    domainadmin    = try(user.domainadmin, false)
   }])) : ""
 
   # Render the full PowerShell installation script
@@ -177,6 +178,7 @@ resource "aws_s3_object" "domain_users" {
     SamAccountName = user.SamAccountName
     GivenName      = user.GivenName
     Surname        = user.Surname
+    domainadmin    = try(user.domainadmin, false) # Include domainadmin field, default to false
   }])
 
   # ETag ensures object is updated when content changes
@@ -184,6 +186,7 @@ resource "aws_s3_object" "domain_users" {
     SamAccountName = user.SamAccountName
     GivenName      = user.GivenName
     Surname        = user.Surname
+    domainadmin    = try(user.domainadmin, false)
   }]))
 
   tags = local.thistagset

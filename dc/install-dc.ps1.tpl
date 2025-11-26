@@ -173,8 +173,14 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                     }
 
                     New-ADUser @currentUserParams
-                    Add-ADGroupMember -Identity "Domain Users" -Members $user.SamAccountName
-                    "Active Directory User $($user.SamAccountName) has been created"
+
+                    # Add to Domain Admins group if domainadmin flag is true
+                    if ($user.PSObject.Properties.Name -contains 'domainadmin' -and $user.domainadmin -eq $true) {
+                        Add-ADGroupMember -Identity "Domain Admins" -Members $user.SamAccountName
+                        "Active Directory User $($user.SamAccountName) has been created and added to Domain Admins"
+                    } else {
+                        "Active Directory User $($user.SamAccountName) has been created"
+                    }
                 }
 
                 # Clean up the JSON file

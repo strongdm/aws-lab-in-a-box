@@ -60,6 +60,7 @@ variable "domain_users" {
     SamAccountName = string
     GivenName      = string
     Surname        = string
+    domainadmin    = optional(bool, false) # Optional: if true, user will be added to Domain Admins group
     tags           = map(string)
   }))
   default = null
