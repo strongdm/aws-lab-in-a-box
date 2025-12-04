@@ -19,7 +19,7 @@ resource "aws_db_instance" "rds_target" {
   identifier                  = "${var.name}-postgres-db"           # Unique identifier for the RDS instance
   allocated_storage           = 5                                   # 5GB storage allocation is sufficient for demos
   engine                      = "postgres"                          # Use PostgreSQL database engine
-  engine_version              = "16.3"                              # Use recent PostgreSQL version
+  engine_version              = "16.11"                              # Use recent PostgreSQL version
   manage_master_user_password = true                                # AWS will generate and manage the master password in Secrets Manager
   multi_az                    = false                               # Single AZ deployment for lab/demo (use true for production)
   username                    = "dba"                               # Master username for database administration
