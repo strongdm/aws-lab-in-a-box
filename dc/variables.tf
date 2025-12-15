@@ -39,6 +39,12 @@ variable "ami" {
   type        = string
 }
 
+variable "use_packer_ami" {
+  description = "Set to true if using a Packer-built AMI with pre-installed ADDS/DNS features. This will use the optimized installation script (install-dc-from-ami.ps1.tpl) which skips feature installation and hostname rename, reducing deployment time from ~18 min to ~11 min. Set to false (default) to use vanilla Windows Server AMI with full installation (install-dc.ps1.tpl)."
+  type        = bool
+  default     = false
+}
+
 variable "target_user" {
   description = "User for Health check"
   type        = string

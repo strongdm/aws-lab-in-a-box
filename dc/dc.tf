@@ -54,8 +54,13 @@ locals {
     domainadmin    = try(user.domainadmin, false)
   }])) : ""
 
-  # Render the full PowerShell installation script
-  install_dc_rendered = templatefile("${path.module}/install-dc.ps1.tpl", {
+  # Select the appropriate installation script based on AMI type
+  # Packer AMI: Use optimized script (skips feature installation, ~11 min deployment)
+  # Vanilla AMI: Use full script (installs all features, ~18-25 min deployment)
+  install_script_template = var.use_packer_ami ? "${path.module}/install-dc-from-ami.ps1.tpl" : "${path.module}/install-dc.ps1.tpl"
+
+  # Render the full PowerShell installation script using the selected template
+  install_dc_rendered = templatefile(local.install_script_template, {
     name              = var.name
     password          = random_password.admin_password.result
     rdpca_base64      = base64encode(var.rdpca) # Base64 encode to avoid parsing issues
@@ -231,9 +236,9 @@ resource "aws_iam_role" "dc" {
   })
 }
 
-# IAM policy to allow reading from the domain users S3 bucket
+# IAM policy to allow reading from the domain users S3 bucket and writing to Parameter Store
 resource "aws_iam_role_policy" "dc_s3_access" {
-  name_prefix = "${var.name}-dc-s3-"
+  name_prefix = "${var.name}-dc-s3-ssm-"
   role        = aws_iam_role.dc.id
 
   policy = jsonencode({
@@ -249,6 +254,15 @@ resource "aws_iam_role_policy" "dc_s3_access" {
           aws_s3_bucket.domain_users.arn,
           "${aws_s3_bucket.domain_users.arn}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:PutParameter",
+          "ssm:GetParameter",
+          "ssm:DeleteParameter"
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/${var.name}/dc/*"
       }
     ]
   })

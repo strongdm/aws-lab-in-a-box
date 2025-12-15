@@ -63,3 +63,19 @@ output "instance_id" {
   value       = aws_instance.dc.id
   description = "The EC2 instance ID of the domain controller"
 }
+
+# Parameter Store paths for DC information
+output "ssm_ca_certificate_parameter" {
+  description = "AWS Systems Manager Parameter Store path containing the CA certificate (Base64 encoded)"
+  value       = "/${var.name}/dc/ca-certificate"
+}
+
+output "ssm_fqdn_parameter" {
+  description = "AWS Systems Manager Parameter Store path containing the DC FQDN"
+  value       = "/${var.name}/dc/fqdn"
+}
+
+output "ssm_computer_name_parameter" {
+  description = "AWS Systems Manager Parameter Store path containing the DC computer name"
+  value       = "/${var.name}/dc/computer-name"
+}
