@@ -157,7 +157,7 @@ resource "aws_key_pair" "windows" {
 
 # Create S3 bucket for storing domain users configuration
 resource "aws_s3_bucket" "domain_users" {
-  bucket_prefix = "${var.name}-dcu-"
+  bucket_prefix = "${lower(var.name)}-dcu-"
   tags          = local.thistagset
 
   force_destroy = true # Allow destruction even with objects inside
