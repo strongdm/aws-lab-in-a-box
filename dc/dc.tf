@@ -32,8 +32,9 @@ resource "aws_instance" "dc" {
   user_data = local.bootstrap_script
 
   # Provide sufficient disk space for AD DS and AD CS
+  # Note: Volume size must be >= Packer AMI snapshot size (50GB)
   root_block_device {
-    volume_size = 40
+    volume_size = 50
   }
 
   tags = local.thistagset
