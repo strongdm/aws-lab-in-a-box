@@ -375,6 +375,73 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         "[DCInstall] Group Policy update triggered"
 
         #--------------------------------------------------------------
+        # Configure DNS Reverse Lookup Zone
+        #--------------------------------------------------------------
+        "[DCInstall] Configuring DNS reverse lookup zone..."
+
+        try {
+            Import-Module DnsServer -ErrorAction Stop
+
+            # Get the DC's IP address
+            $computerName = $env:COMPUTERNAME
+            $dcIP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like "10.0.0.*" }).IPAddress
+
+            if ($dcIP) {
+                "[DCInstall] DC IP Address: $dcIP"
+
+                # Create reverse lookup zone for 10.0.0.0/24 network
+                $networkId = "10.0.0.0/24"
+                $zoneName = "0.0.10.in-addr.arpa"
+
+                # Check if reverse zone exists
+                $existingZone = Get-DnsServerZone -Name $zoneName -ErrorAction SilentlyContinue
+
+                if (-not $existingZone) {
+                    "[DCInstall] Creating reverse lookup zone: $zoneName"
+                    Add-DnsServerPrimaryZone -NetworkID $networkId -ReplicationScope "Forest" -DynamicUpdate "Secure"
+                    "[DCInstall] Reverse lookup zone created successfully"
+                } else {
+                    "[DCInstall] Reverse lookup zone already exists: $zoneName"
+                }
+
+                # Add PTR record for the DC itself
+                $domainFqdn = "${name}.local"
+                $dcFqdn = "$computerName.$domainFqdn"
+
+                # Extract the last octet from IP (e.g., 17 from 10.0.0.17)
+                $lastOctet = $dcIP.Split('.')[-1]
+
+                "[DCInstall] Adding PTR record: $lastOctet -> $dcFqdn"
+
+                # Remove existing PTR record if it exists
+                $existingPTR = Get-DnsServerResourceRecord -ZoneName $zoneName -RRType Ptr -Name $lastOctet -ErrorAction SilentlyContinue
+                if ($existingPTR) {
+                    Remove-DnsServerResourceRecord -ZoneName $zoneName -RRType Ptr -Name $lastOctet -Force -ErrorAction SilentlyContinue
+                    "[DCInstall] Removed existing PTR record"
+                }
+
+                # Add PTR record
+                Add-DnsServerResourceRecordPtr -ZoneName $zoneName -Name $lastOctet -PtrDomainName $dcFqdn
+                "[DCInstall] PTR record added successfully: $dcIP -> $dcFqdn"
+
+                # Verify the PTR record
+                $ptrRecord = Resolve-DnsName -Name $dcIP -Type PTR -ErrorAction SilentlyContinue
+                if ($ptrRecord) {
+                    "[DCInstall] PTR record verified: $($ptrRecord.NameHost)"
+                } else {
+                    "[DCInstall] WARNING: Could not verify PTR record"
+                }
+
+            } else {
+                "[DCInstall] WARNING: Could not determine DC IP address in 10.0.0.0/24 range"
+            }
+
+        } catch {
+            "[DCInstall] ERROR: Failed to configure DNS reverse zone: $_"
+            "[DCInstall] Exception details: $($_.Exception.Message)"
+        }
+
+        #--------------------------------------------------------------
         # Store CA Certificate and Computer Name in Parameter Store
         #--------------------------------------------------------------
         "[DCInstall] Storing CA certificate and computer name in Parameter Store..."
