@@ -379,6 +379,15 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         #--------------------------------------------------------------
         "[DCInstall] Storing CA certificate and computer name in Parameter Store..."
 
+        # Import AWS Tools for PowerShell (SSM module)
+        try {
+            Import-Module AWS.Tools.SimpleSystemsManagement -ErrorAction Stop
+            "[DCInstall] AWS SSM PowerShell module loaded successfully"
+        } catch {
+            "[DCInstall] WARNING: Failed to load AWS.Tools.SimpleSystemsManagement module: $_"
+            "[DCInstall] Parameter Store operations may fail"
+        }
+
         try {
             # Get the current computer name
             $computerName = $env:COMPUTERNAME
@@ -392,9 +401,27 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
             $caName = "${name}-CA"
 
             # Get the CA certificate from the Certificate Authority
-            # Using certutil to export the CA certificate (redirect output to file)
-            "[DCInstall] Exporting CA certificate from '$caName'..."
-            certutil -ca.cert "$caCertPath" 2>&1 | Out-Null
+            # Method: Export from local certificate store where ADCS publishes it
+            "[DCInstall] Exporting CA certificate from certificate store..."
+
+            try {
+                # Get the CA certificate from the local machine's Root store
+                # ADCS publishes its own cert to the Trusted Root Certification Authorities
+                $caCert = Get-ChildItem -Path "Cert:\LocalMachine\Root" | Where-Object { $_.Subject -match "CN=$caName" } | Select-Object -First 1
+
+                if ($caCert) {
+                    # Export the certificate to a file
+                    $certBytes = $caCert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+                    [System.IO.File]::WriteAllBytes($caCertPath, $certBytes)
+                    "[DCInstall] CA certificate exported successfully from certificate store"
+                } else {
+                    "[DCInstall] WARNING: Could not find CA certificate in Root store, trying alternate method..."
+                    # Fallback: Use certutil to get the CA cert directly from CA config
+                    $null = certutil -config - -ca.cert "$caCertPath" 2>&1
+                }
+            } catch {
+                "[DCInstall] WARNING: Failed to export CA certificate: $_"
+            }
 
             if (Test-Path $caCertPath) {
                 # Read the certificate and convert to Base64
