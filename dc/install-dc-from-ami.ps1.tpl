@@ -392,8 +392,9 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
             $caName = "${name}-CA"
 
             # Get the CA certificate from the Certificate Authority
-            # Using certutil to export the CA certificate
-            certutil -ca.cert $caCertPath
+            # Using certutil to export the CA certificate (redirect output to file)
+            "[DCInstall] Exporting CA certificate from '$caName'..."
+            certutil -ca.cert "$caCertPath" 2>&1 | Out-Null
 
             if (Test-Path $caCertPath) {
                 # Read the certificate and convert to Base64
