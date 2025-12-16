@@ -94,68 +94,73 @@ $retryCount = 0
 #--------------------------------------------------------------
 if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and (Test-Path "C:\restart.done"))) {
 
-    if (-not (Get-Service -Name "CertSvc" -ErrorAction SilentlyContinue)) {
-        "[DCInstall] Certificate Services doesn't exist. Installing it..."
+    "[DCInstall] ADCS not yet configured. Starting installation..."
 
-        # OPTIMIZATION: Wait for NTDS (Active Directory) service with exponential backoff
-        # Start with shorter intervals since DC should be ready quickly
-        $waitSeconds = 10
-        while (!(Get-Service -Name "NTDS" -ErrorAction SilentlyContinue) -and $retryCount -lt 12) {
-            "[DCInstall] Waiting for NTDS service to be running... Attempt $retryCount/12 (waiting $waitSeconds seconds) $(Get-Date)"
-            Start-Sleep -Seconds $waitSeconds
-            $retryCount++
-            # Exponential backoff: 10, 10, 15, 15, 20, 20, 30, 30, 30...
-            if ($retryCount -ge 4 -and $waitSeconds -lt 30) { $waitSeconds = [Math]::Min($waitSeconds + 5, 30) }
-        }
+    # OPTIMIZATION: Wait for NTDS (Active Directory) service with exponential backoff
+    # Start with shorter intervals since DC should be ready quickly
+    $waitSeconds = 10
+    while (!(Get-Service -Name "NTDS" -ErrorAction SilentlyContinue) -and $retryCount -lt 12) {
+        "[DCInstall] Waiting for NTDS service to be running... Attempt $retryCount/12 (waiting $waitSeconds seconds) $(Get-Date)"
+        Start-Sleep -Seconds $waitSeconds
+        $retryCount++
+        # Exponential backoff: 10, 10, 15, 15, 20, 20, 30, 30, 30...
+        if ($retryCount -ge 4 -and $waitSeconds -lt 30) { $waitSeconds = [Math]::Min($waitSeconds + 5, 30) }
+    }
 
-        # If NTDS still not running after retries, force a reboot
-        if (($retryCount -ge 12) -and (-not (Test-Path "C:\restart2.done"))) {
-            "[DCInstall] NTDS service still not running, forcing reboot... $(Get-Date)"
-            "Preparing for Manual Restart $(Get-Date)" | Out-File "c:\restart2.done"
-            Restart-Computer -Force
-        }
+    # If NTDS still not running after retries, force a reboot
+    if (($retryCount -ge 12) -and (-not (Test-Path "C:\restart2.done"))) {
+        "[DCInstall] NTDS service still not running, forcing reboot... $(Get-Date)"
+        "Preparing for Manual Restart $(Get-Date)" | Out-File "c:\restart2.done"
+        Restart-Computer -Force
+    }
 
-        # OPTIMIZATION: Install ADCS Windows Feature (only after DC is operational)
-        if (Get-Service -Name "NTDS" -ErrorAction SilentlyContinue) {
-            "[DCInstall] NTDS service is running, installing ADCS feature... $(Get-Date)"
+    # OPTIMIZATION: Install ADCS Windows Feature (only after DC is operational)
+    if (Get-Service -Name "NTDS" -ErrorAction SilentlyContinue) {
+        "[DCInstall] NTDS service is running, installing ADCS feature... $(Get-Date)"
 
-            # Install and immediately configure in one flow (no unnecessary wait)
+        # Check if ADCS feature is already installed, if not install it
+        $adcsFeature = Get-WindowsFeature -Name ADCS-Cert-Authority
+        if (-not $adcsFeature.Installed) {
             Install-WindowsFeature ADCS-Cert-Authority -IncludeManagementTools
             "[DCInstall] ADCS feature installed successfully"
-
-            # OPTIMIZATION: Configure immediately - no need to wait or check service status
-            # The Install-ADCSCertificationAuthority will start the service automatically
-            Import-Module ADCSDeployment -ErrorAction Stop
-            "[DCInstall] Configuring ADCS as Enterprise Root CA... $(Get-Date)"
-
-            # Define CA details
-            $caCommonName = "${name}-CA"
-            $caKeyLength = 2048
-            $caHashAlgorithm = "SHA256"
-
-            # OPTIMIZATION: Install and configure the Enterprise Root CA
-            # Using -OverwriteExistingKey and -OverwriteExistingDatabase speeds up retries
-            # Note: Using 10 years validity (manually verified to work)
-            try {
-                Install-ADCSCertificationAuthority -CAType EnterpriseRootCA `
-                    -CACommonName $caCommonName `
-                    -KeyLength $caKeyLength `
-                    -HashAlgorithm $caHashAlgorithm `
-                    -ValidityPeriod Years `
-                    -ValidityPeriodUnits 10 `
-                    -OverwriteExistingKey `
-                    -OverwriteExistingDatabase `
-                    -Force
-
-                "[DCInstall] ADCS configured successfully as Enterprise Root CA"
-                "ADCS Set up." | Out-File "C:\adcs.done"
-            } catch {
-                "[DCInstall] ERROR: Failed to configure ADCS: $_"
-                # Don't create the marker file if it failed
-            }
+        } else {
+            "[DCInstall] ADCS feature already installed, proceeding to configuration"
         }
-    } else {
-        "[DCInstall] ADCS is already installed"
+
+        # OPTIMIZATION: Configure immediately - no need to wait or check service status
+        # The Install-ADCSCertificationAuthority will start the service automatically
+        Import-Module ADCSDeployment -ErrorAction Stop
+        "[DCInstall] Configuring ADCS as Enterprise Root CA... $(Get-Date)"
+
+        # Define CA details
+        $caCommonName = "${name}-CA"
+        $caKeyLength = 2048
+        $caHashAlgorithm = "SHA256"
+
+        # OPTIMIZATION: Install and configure the Enterprise Root CA
+        # Using -OverwriteExistingKey and -OverwriteExistingDatabase speeds up retries
+        # Note: Using 10 years validity (manually verified to work)
+        try {
+            Install-ADCSCertificationAuthority -CAType EnterpriseRootCA `
+                -CACommonName $caCommonName `
+                -KeyLength $caKeyLength `
+                -HashAlgorithm $caHashAlgorithm `
+                -ValidityPeriod Years `
+                -ValidityPeriodUnits 10 `
+                -OverwriteExistingKey `
+                -OverwriteExistingDatabase `
+                -Force
+
+            "[DCInstall] ADCS configured successfully as Enterprise Root CA"
+            "ADCS Set up." | Out-File "C:\adcs.done"
+        } catch {
+            "[DCInstall] ERROR: Failed to configure ADCS: $_"
+            # Don't create the marker file if it failed
+        }
+    }
+} else {
+    if (Test-Path "C:\adcs.done") {
+        "[DCInstall] ADCS already configured successfully (marker file exists)"
     }
 }
 
