@@ -424,20 +424,29 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
             }
 
             if (Test-Path $caCertPath) {
-                # Read the certificate and convert to Base64
+                # Read the certificate and convert to PEM format
                 $caCertBytes = [System.IO.File]::ReadAllBytes($caCertPath)
                 $caCertBase64 = [System.Convert]::ToBase64String($caCertBytes)
 
-                "[DCInstall] CA certificate exported successfully"
+                # Convert to PEM format with proper headers for Linux compatibility
+                # Split Base64 into 64-character lines as per PEM standard
+                $pemLines = @()
+                for ($i = 0; $i -lt $caCertBase64.Length; $i += 64) {
+                    $lineLength = [Math]::Min(64, $caCertBase64.Length - $i)
+                    $pemLines += $caCertBase64.Substring($i, $lineLength)
+                }
+                $caCertPem = "-----BEGIN CERTIFICATE-----`n" + ($pemLines -join "`n") + "`n-----END CERTIFICATE-----"
+
+                "[DCInstall] CA certificate exported successfully (PEM format)"
 
                 # Store in Parameter Store
                 # Note: Requires IAM permissions for SSM:PutParameter
 
-                # Store CA Certificate
+                # Store CA Certificate in PEM format
                 $paramNameCert = "/${name}/dc/ca-certificate"
                 try {
-                    Write-SSMParameter -Name $paramNameCert -Value $caCertBase64 -Type "String" -Overwrite $true
-                    "[DCInstall] CA certificate stored in Parameter Store: $paramNameCert"
+                    Write-SSMParameter -Name $paramNameCert -Value $caCertPem -Type "String" -Overwrite $true
+                    "[DCInstall] CA certificate stored in Parameter Store (PEM format): $paramNameCert"
                 } catch {
                     "[DCInstall] WARNING: Failed to store CA certificate in Parameter Store: $_"
                     "[DCInstall] This may be due to missing IAM permissions (ssm:PutParameter)"
