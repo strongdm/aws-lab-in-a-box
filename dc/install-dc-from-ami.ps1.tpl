@@ -384,14 +384,14 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
 
             # Get the DC's IP address
             $computerName = $env:COMPUTERNAME
-            $dcIP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like "10.0.0.*" }).IPAddress
+            $dcIP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like "10.*" }).IPAddress
 
             if ($dcIP) {
                 "[DCInstall] DC IP Address: $dcIP"
 
-                # Create reverse lookup zone for 10.0.0.0/24 network
-                $networkId = "10.0.0.0/24"
-                $zoneName = "0.0.10.in-addr.arpa"
+                # Create reverse lookup zone for 10.0.0.0/8 network
+                $networkId = "10.0.0.0/8"
+                $zoneName = "10.in-addr.arpa"
 
                 # Check if reverse zone exists
                 $existingZone = Get-DnsServerZone -Name $zoneName -ErrorAction SilentlyContinue
@@ -408,20 +408,22 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                 $domainFqdn = "${name}.local"
                 $dcFqdn = "$computerName.$domainFqdn"
 
-                # Extract the last octet from IP (e.g., 17 from 10.0.0.17)
-                $lastOctet = $dcIP.Split('.')[-1]
+                # For a /8 network, we need to use octets 2.3.4 as the PTR record name
+                # For example, 10.0.0.17 becomes "17.0.0" in the 10.in-addr.arpa zone
+                $ipParts = $dcIP.Split('.')
+                $ptrRecordName = "$($ipParts[3]).$($ipParts[2]).$($ipParts[1])"
 
-                "[DCInstall] Adding PTR record: $lastOctet -> $dcFqdn"
+                "[DCInstall] Adding PTR record: $ptrRecordName -> $dcFqdn"
 
                 # Remove existing PTR record if it exists
-                $existingPTR = Get-DnsServerResourceRecord -ZoneName $zoneName -RRType Ptr -Name $lastOctet -ErrorAction SilentlyContinue
+                $existingPTR = Get-DnsServerResourceRecord -ZoneName $zoneName -RRType Ptr -Name $ptrRecordName -ErrorAction SilentlyContinue
                 if ($existingPTR) {
-                    Remove-DnsServerResourceRecord -ZoneName $zoneName -RRType Ptr -Name $lastOctet -Force -ErrorAction SilentlyContinue
+                    Remove-DnsServerResourceRecord -ZoneName $zoneName -RRType Ptr -Name $ptrRecordName -Force -ErrorAction SilentlyContinue
                     "[DCInstall] Removed existing PTR record"
                 }
 
                 # Add PTR record
-                Add-DnsServerResourceRecordPtr -ZoneName $zoneName -Name $lastOctet -PtrDomainName $dcFqdn
+                Add-DnsServerResourceRecordPtr -ZoneName $zoneName -Name $ptrRecordName -PtrDomainName $dcFqdn
                 "[DCInstall] PTR record added successfully: $dcIP -> $dcFqdn"
 
                 # Verify the PTR record
@@ -433,7 +435,7 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                 }
 
             } else {
-                "[DCInstall] WARNING: Could not determine DC IP address in 10.0.0.0/24 range"
+                "[DCInstall] WARNING: Could not determine DC IP address in 10.0.0.0/8 range"
             }
 
         } catch {
