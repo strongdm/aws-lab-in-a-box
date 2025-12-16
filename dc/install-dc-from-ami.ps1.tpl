@@ -127,8 +127,31 @@ if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and
             "[DCInstall] ADCS feature already installed, proceeding to configuration"
         }
 
-        # OPTIMIZATION: Configure immediately - no need to wait or check service status
-        # The Install-ADCSCertificationAuthority will start the service automatically
+        # Wait for AD to be fully operational before configuring ADCS
+        # The NTDS service being running doesn't guarantee AD schema is ready
+        "[DCInstall] Waiting for Active Directory to be fully operational..."
+        $adReadyRetries = 0
+        $adReady = $false
+        while (-not $adReady -and $adReadyRetries -lt 10) {
+            try {
+                # Try to query AD - if this succeeds, AD is operational
+                Import-Module ActiveDirectory -ErrorAction Stop
+                $null = Get-ADDomain -ErrorAction Stop
+                $adReady = $true
+                "[DCInstall] Active Directory is operational and ready"
+            } catch {
+                $adReadyRetries++
+                "[DCInstall] AD not fully ready yet, waiting 30 seconds... (Attempt $adReadyRetries/10)"
+                Start-Sleep -Seconds 30
+            }
+        }
+
+        if (-not $adReady) {
+            "[DCInstall] WARNING: Active Directory may not be fully operational after 5 minutes"
+            "[DCInstall] Proceeding with ADCS configuration anyway..."
+        }
+
+        # Configure ADCS with retry logic
         Import-Module ADCSDeployment -ErrorAction Stop
         "[DCInstall] Configuring ADCS as Enterprise Root CA... $(Get-Date)"
 
@@ -137,25 +160,41 @@ if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and
         $caKeyLength = 2048
         $caHashAlgorithm = "SHA256"
 
-        # OPTIMIZATION: Install and configure the Enterprise Root CA
-        # Using -OverwriteExistingKey and -OverwriteExistingDatabase speeds up retries
-        # Note: Using 10 years validity (manually verified to work)
-        try {
-            Install-ADCSCertificationAuthority -CAType EnterpriseRootCA `
-                -CACommonName $caCommonName `
-                -KeyLength $caKeyLength `
-                -HashAlgorithm $caHashAlgorithm `
-                -ValidityPeriod Years `
-                -ValidityPeriodUnits 10 `
-                -OverwriteExistingKey `
-                -OverwriteExistingDatabase `
-                -Force
+        # Retry ADCS configuration up to 3 times with increasing delays
+        $adcsConfigured = $false
+        $adcsRetries = 0
+        $maxAdcsRetries = 3
 
-            "[DCInstall] ADCS configured successfully as Enterprise Root CA"
-            "ADCS Set up." | Out-File "C:\adcs.done"
-        } catch {
-            "[DCInstall] ERROR: Failed to configure ADCS: $_"
-            # Don't create the marker file if it failed
+        while (-not $adcsConfigured -and $adcsRetries -lt $maxAdcsRetries) {
+            $adcsRetries++
+            "[DCInstall] ADCS configuration attempt $adcsRetries of $maxAdcsRetries... $(Get-Date)"
+
+            try {
+                Install-ADCSCertificationAuthority -CAType EnterpriseRootCA `
+                    -CACommonName $caCommonName `
+                    -KeyLength $caKeyLength `
+                    -HashAlgorithm $caHashAlgorithm `
+                    -ValidityPeriod Years `
+                    -ValidityPeriodUnits 10 `
+                    -OverwriteExistingKey `
+                    -OverwriteExistingDatabase `
+                    -Force
+
+                "[DCInstall] ADCS configured successfully as Enterprise Root CA"
+                "ADCS Set up." | Out-File "C:\adcs.done"
+                $adcsConfigured = $true
+            } catch {
+                "[DCInstall] ERROR: ADCS configuration attempt $adcsRetries failed: $_"
+
+                if ($adcsRetries -lt $maxAdcsRetries) {
+                    $waitTime = $adcsRetries * 60  # Wait 60, 120 seconds between retries
+                    "[DCInstall] Waiting $waitTime seconds before retry..."
+                    Start-Sleep -Seconds $waitTime
+                } else {
+                    "[DCInstall] FATAL: Failed to configure ADCS after $maxAdcsRetries attempts"
+                    "[DCInstall] Manual intervention required - check AD domain controller status"
+                }
+            }
         }
     }
 } else {
