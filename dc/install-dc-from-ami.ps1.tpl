@@ -135,14 +135,14 @@ if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and
 
             # OPTIMIZATION: Install and configure the Enterprise Root CA
             # Using -OverwriteExistingKey and -OverwriteExistingDatabase speeds up retries
-            # Note: Using 5 years validity to comply with AD schema constraints
+            # Note: Using 10 years validity (manually verified to work)
             try {
                 Install-ADCSCertificationAuthority -CAType EnterpriseRootCA `
                     -CACommonName $caCommonName `
                     -KeyLength $caKeyLength `
                     -HashAlgorithm $caHashAlgorithm `
                     -ValidityPeriod Years `
-                    -ValidityPeriodUnits 5 `
+                    -ValidityPeriodUnits 10 `
                     -OverwriteExistingKey `
                     -OverwriteExistingDatabase `
                     -Force
@@ -389,6 +389,20 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                 } catch {
                     "[DCInstall] WARNING: Failed to store computer name in Parameter Store: $_"
                     "[DCInstall] This may be due to missing IAM permissions (ssm:PutParameter)"
+                }
+
+                # Store Domain Administrator SID
+                $paramNameAdminSid = "/${name}/dc/domain-admin-sid"
+                try {
+                    $domainAdminUser = Get-ADUser -Identity "domainadmin" -ErrorAction Stop
+                    $domainAdminSid = $domainAdminUser.SID.Value
+                    "[DCInstall] Domain Administrator SID: $domainAdminSid"
+
+                    Write-SSMParameter -Name $paramNameAdminSid -Value $domainAdminSid -Type "String" -Overwrite $true
+                    "[DCInstall] Domain Administrator SID stored in Parameter Store: $paramNameAdminSid"
+                } catch {
+                    "[DCInstall] WARNING: Failed to retrieve or store Domain Administrator SID: $_"
+                    "[DCInstall] This may be due to user not existing or missing IAM permissions"
                 }
 
                 # Clean up certificate file

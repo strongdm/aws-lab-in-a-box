@@ -79,3 +79,8 @@ output "ssm_computer_name_parameter" {
   description = "AWS Systems Manager Parameter Store path containing the DC computer name"
   value       = "/${var.name}/dc/computer-name"
 }
+
+output "ssm_domain_admin_sid_parameter" {
+  description = "AWS Systems Manager Parameter Store path containing the Domain Administrator SID"
+  value       = "/${var.name}/dc/domain-admin-sid"
+}
