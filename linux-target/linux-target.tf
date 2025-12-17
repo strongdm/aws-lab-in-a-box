@@ -22,9 +22,16 @@ resource "aws_instance" "ssh-target" {
 
   # Configure the instance with the StrongDM SSH CA through a bootstrap script
   # The script adds the CA to trusted CAs and configures the target user
+  # If domain_name is provided, also configure DNS and join AD domain
   user_data = templatefile("${path.module}/ca-provision.tpl", {
-    target_user = var.target_user # Username that will be allowed to login via SSH CA
-    sshca       = var.sshca       # The SSH CA public key from StrongDM
+    target_user            = var.target_user                             # Username that will be allowed to login via SSH CA
+    sshca                  = var.sshca                                   # The SSH CA public key from StrongDM
+    has_domain_controller  = var.domain_name != null                     # Flag indicating if domain join is enabled
+    dc_ip                  = var.dc_ip != null ? var.dc_ip : ""          # Domain controller IP for DNS
+    domain_name            = var.domain_name != null ? var.domain_name : "" # Domain name for joining
+    dc_ca_certificate      = var.dc_ca_certificate != null ? var.dc_ca_certificate : "" # DC CA certificate
+    domain_admin           = var.domain_admin != null ? var.domain_admin : "" # Domain admin username
+    domain_password        = var.domain_password != null ? var.domain_password : "" # Domain admin password
   })
 
   # Apply consistent tagging for resource management and identification

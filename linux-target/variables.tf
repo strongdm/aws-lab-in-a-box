@@ -43,3 +43,36 @@ variable "target_user" {
   type        = string
   default     = "ubuntu"
 }
+
+#---------- Domain Join Configuration ----------#
+
+variable "domain_name" {
+  description = "Active Directory domain name to join (e.g., 'europa'). If provided, the instance will join the domain."
+  type        = string
+  default     = null
+}
+
+variable "dc_ip" {
+  description = "Domain Controller IP address for DNS configuration. Required if domain_name is provided."
+  type        = string
+  default     = null
+}
+
+variable "dc_ca_certificate" {
+  description = "Domain Controller CA certificate in PEM format. Required if domain_name is provided."
+  type        = string
+  default     = null
+}
+
+variable "domain_admin" {
+  description = "Domain administrator username for domain join. Required if domain_name is provided."
+  type        = string
+  default     = null
+}
+
+variable "domain_password" {
+  description = "Domain administrator password for domain join. Required if domain_name is provided."
+  type        = string
+  default     = null
+  sensitive   = true
+}
