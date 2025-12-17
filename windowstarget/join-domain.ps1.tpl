@@ -19,22 +19,26 @@
 
 <powershell>
 Start-Transcript -Path "C:\SDMDomainSetup.log" -Append
-"Disable NLA"
-$regKeyPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server"
-$regValueName = "UserAuthentication"
 
-# Check if the registry key exists
-if (Test-Path $regKeyPath) {
-    # Set the registry value to disable NLA (0 means disabled, 1 means enabled)
-    Set-ItemProperty -Path $regKeyPath -Name $regValueName -Value 0
-    Write-Host "Network Level Authentication (NLA) has been disabled."
-} else {
-    Write-Host "Registry path not found. Ensure you're running this with administrative privileges."
-}
+"Installing AWS PowerShell Tools"
+Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+Install-Module -Name AWS.Tools.Common -Force -AllowClobber
+Write-Host "AWS PowerShell Tools installed successfully"
+
 "Changing DNS"
 Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses @("${dc_ip}")
+
+# Get the AWS-assigned hostname (e.g., ip-10-0-0-123)
+"Getting AWS-assigned hostname from instance metadata"
+$awsHostname = Invoke-RestMethod -Uri http://169.254.169.254/latest/meta-data/local-hostname
+$newComputerName = $awsHostname.Split('.')[0]  # Extract just the hostname part (ip-10-0-0-123)
+
+Write-Host "Current computer name: $env:COMPUTERNAME"
+Write-Host "New computer name will be: $newComputerName"
+
 # Define domain and credentials
-"Joining Domain"
+"Joining Domain with new computer name"
 $domain = "${name}.local"  # Replace with your domain name
 $domainUser = "${name}\domainadmin"  # Replace with a domain admin username
 $domainPassword = "${domain_password}"  # Replace with the domain admin password
@@ -45,9 +49,9 @@ $securePassword = ConvertTo-SecureString -String $domainPassword -AsPlainText -F
 # Create a PSCredential object
 $credential = New-Object System.Management.Automation.PSCredential ($domainUser, $securePassword)
 
-# Join the computer to the domain
-Add-Computer -DomainName $domain -Credential $credential -Restart -Force
+# Rename computer and join the domain in a single operation (only one reboot required)
+Add-Computer -DomainName $domain -NewName $newComputerName -Credential $credential -Restart -Force
 
 # Output result
-Write-Host "Computer has been joined to the domain and will restart."
+Write-Host "Computer will be renamed to $newComputerName and joined to the domain. Restarting now."
 </powershell>
