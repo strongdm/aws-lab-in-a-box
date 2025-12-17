@@ -131,7 +131,7 @@ resource "aws_instance" "hcvault" {
   
   user_data_replace_on_change = true
 
-  user_data = base64encode(templatefile("${path.module}/vault-provision.tpl", {
+  user_data_base64 = base64encode(templatefile("${path.module}/vault-provision.tpl", {
     sshca                      = var.sshca
     target_user                = var.target_user
     vault_version              = var.vault_version
