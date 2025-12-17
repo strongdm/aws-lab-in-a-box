@@ -35,7 +35,7 @@
 resource "sdm_managed_secret_value" "secret" {
   value = {
     user_dn  = var.user_dn                                                                                    # LDAP DN for the domain user
-    //username = var.domain_name != null ? "${var.SamAccountName}@${var.domain_name}.local" : var.SamAccountName # Store the username with domain suffix if domain_name provided
+    username = var.domain_name != null ? "${var.SamAccountName}@${var.domain_name}.local" : var.SamAccountName # Store the username with domain suffix if domain_name provided
   }
   public_key = var.se_pubkey # Public key from the secret engine for encryption
 }
