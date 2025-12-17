@@ -151,6 +151,35 @@ echo "${domain_password}" | realm join -v -U ${domain_admin} ${domain_name}.loca
 
 if [ $? -eq 0 ]; then
     echo "Successfully joined domain ${domain_name}.local" | logger -t sdminstall
+
+    #--------------------------------------------------------------
+    # Configure PAM for automatic home directory creation
+    #--------------------------------------------------------------
+    echo "Configuring PAM to create home directories automatically..." | logger -t sdminstall
+    pam-auth-update --enable mkhomedir
+
+    # Also ensure it's configured in common-session
+    if ! grep -q "pam_mkhomedir.so" /etc/pam.d/common-session; then
+        echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/pam.d/common-session
+    fi
+
+    #--------------------------------------------------------------
+    # Configure SSSD for better group enumeration
+    #--------------------------------------------------------------
+    echo "Configuring SSSD for group enumeration..." | logger -t sdminstall
+
+    # Add enumeration for better group resolution
+    if ! grep -q "enumerate = True" /etc/sssd/sssd.conf; then
+        sed -i "/\[domain\/${domain_name}.local\]/a enumerate = True" /etc/sssd/sssd.conf
+    fi
+
+    # Set proper permissions on sssd.conf
+    chmod 600 /etc/sssd/sssd.conf
+
+    # Restart SSSD to apply changes
+    systemctl restart sssd
+    echo "SSSD configuration updated and restarted" | logger -t sdminstall
+
 else
     echo "ERROR: Failed to join domain ${domain_name}.local" | logger -t sdminstall
 fi
