@@ -31,3 +31,9 @@ variable "SamAccountName" {
   description = "Username of the account"
   type        = string
 }
+
+variable "domain_name" {
+  description = "Domain name for the managed user (e.g., 'europa'). If provided, will be appended to username as username@domain.local"
+  type        = string
+  default     = null
+}

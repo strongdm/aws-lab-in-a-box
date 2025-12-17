@@ -34,7 +34,8 @@
 # Create an encrypted secret value containing the user's LDAP distinguished name
 resource "sdm_managed_secret_value" "secret" {
   value = {
-    user_dn = var.user_dn # LDAP DN for the domain user
+    user_dn  = var.user_dn                                                                                    # LDAP DN for the domain user
+    username = var.domain_name != null ? "${var.SamAccountName}@${var.domain_name}.local" : var.SamAccountName # Store the username with domain suffix if domain_name provided
   }
   public_key = var.se_pubkey # Public key from the secret engine for encryption
 }
@@ -43,7 +44,7 @@ resource "sdm_managed_secret_value" "secret" {
 resource "sdm_managed_secret" "secret" {
 
   //name = replace(substr(each.value.value.user_dn, index(each.value.value.user_dn, "=") + 1, index(each.value.value.user_dn, ",") - index(each.value.value.user_dn, "=") - 1), " ", "_")
-  name             = var.SamAccountName                        # Windows username for the managed secret
+  name             = replace(var.SamAccountName, ".", "_")     # Windows username for the managed secret (periods replaced with underscores)
   secret_engine_id = var.se_id                                 # Reference to the Active Directory secret engine
   value            = sdm_managed_secret_value.secret.encrypted # Encrypted secret value
   tags             = var.tags                                  # User-specific tags for access control
