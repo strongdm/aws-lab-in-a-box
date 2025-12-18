@@ -196,6 +196,16 @@ if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and
                     "[DCInstall] Subordinate CA requests may require manual approval"
                 }
 
+                # Enable PowerShell Remoting (WinRM) for remote management
+                "[DCInstall] Enabling PowerShell Remoting (WinRM)..."
+                try {
+                    Enable-PSRemoting -Force -SkipNetworkProfileCheck
+                    Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+                    "[DCInstall] PowerShell Remoting enabled successfully"
+                } catch {
+                    "[DCInstall] WARNING: Failed to enable PowerShell Remoting: $_"
+                }
+
                 "ADCS Set up." | Out-File "C:\adcs.done"
                 $adcsConfigured = $true
             } catch {

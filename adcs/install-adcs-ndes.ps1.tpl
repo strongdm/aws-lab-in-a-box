@@ -235,46 +235,102 @@ try {
 
         Write-Log "Request ID to process: `$requestId"
 
-        # Auto-approve the certificate request on the root CA
-        # Use certutil -resubmit with -config to target the remote CA
-        Write-Log "Auto-approving certificate request on root CA..."
+        # Use PowerShell Remoting (WinRM) to sign certificate on DC
+        # This avoids RPC issues when CA service is not running on ADCS server
+        Write-Log "Using PowerShell Remoting to sign certificate on DC..."
 
         try {
-            Write-Log "Running: certutil -config `"`$rootCAName`" -resubmit `$requestId"
-            `$approveOutput = certutil -config "`$rootCAName" -resubmit `$requestId 2>&1
-            Write-Log "Approval output: `$approveOutput"
+            # Create credential object for domain admin
+            `$securePassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
+            `$domainCred = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", `$securePassword)
 
-            if (`$LASTEXITCODE -eq 0) {
-                Write-Log "Certificate request approved successfully"
+            # Copy .req file to DC and sign it via PowerShell Remoting
+            Write-Log "Copying certificate request to DC..."
+            `$session = New-PSSession -ComputerName "$dcFQDN" -Credential `$domainCred
+
+            # Copy the .req file to DC
+            Copy-Item -Path "`$requestFile" -Destination "C:\temp-ca-request.req" -ToSession `$session
+            Write-Log "Request file copied to DC"
+
+            # Submit and approve the certificate request on DC
+            Write-Log "Submitting and approving certificate on DC..."
+            `$signResult = Invoke-Command -Session `$session -ScriptBlock {
+                param(`$reqFile, `$caName)
+
+                # Submit the request
+                `$output = certreq -submit -config "`$caName" `$reqFile 2>&1 | Out-String
+
+                # Parse request ID from output
+                if (`$output -match "RequestId:\s*(\d+)") {
+                    `$reqId = `$Matches[1]
+
+                    # Since auto-approval is enabled (RequestDisposition=1), cert should be issued
+                    # Just retrieve it
+                    certreq -retrieve -config "`$caName" `$reqId "C:\temp-ca-cert.crt" 2>&1 | Out-Null
+
+                    return @{
+                        Success = (Test-Path "C:\temp-ca-cert.crt")
+                        RequestId = `$reqId
+                        Output = `$output
+                    }
+                } else {
+                    return @{
+                        Success = `$false
+                        RequestId = `$null
+                        Output = `$output
+                    }
+                }
+            } -ArgumentList `$requestFile, `$rootCAName
+
+            Write-Log "Sign result: Success=`$(`$signResult.Success), RequestID=`$(`$signResult.RequestId)"
+            Write-Log "Output: `$(`$signResult.Output)"
+
+            if (`$signResult.Success) {
+                # Copy the signed certificate back from DC
+                Write-Log "Copying signed certificate from DC..."
+                `$certFile = "C:\$caCommonName.crt"
+                Copy-Item -Path "C:\temp-ca-cert.crt" -Destination `$certFile -FromSession `$session
+                Write-Log "Certificate copied from DC to `$certFile"
+
+                # Clean up temp files on DC
+                Invoke-Command -Session `$session -ScriptBlock {
+                    Remove-Item -Path "C:\temp-ca-request.req" -Force -ErrorAction SilentlyContinue
+                    Remove-Item -Path "C:\temp-ca-cert.crt" -Force -ErrorAction SilentlyContinue
+                }
+
+                # Close the session
+                Remove-PSSession -Session `$session
+
+                # Install the certificate locally
+                if (Test-Path `$certFile) {
+                    Write-Log "Installing subordinate CA certificate..."
+                    `$installOutput = certutil -installcert "`$certFile" 2>&1
+                    Write-Log "certutil output: `$installOutput"
+                    Write-Log "Subordinate CA certificate installed successfully"
+
+                    # Start CA service
+                    Start-Service -Name CertSvc -ErrorAction Stop
+                    Write-Log "Certificate Authority service started"
+
+                    # Verify CA is operational
+                    Start-Sleep -Seconds 5
+                    `$pingOutput = certutil -ping 2>&1
+                    Write-Log "CA ping result: `$pingOutput"
+                } else {
+                    Write-Log "ERROR: Certificate file not found after copy from DC"
+                }
             } else {
-                Write-Log "WARNING: certutil -resubmit returned exit code `$LASTEXITCODE"
-                Write-Log "This may indicate the request was already approved or there was an error"
+                Write-Log "ERROR: Failed to sign certificate on DC"
+                Remove-PSSession -Session `$session -ErrorAction SilentlyContinue
             }
         } catch {
-            Write-Log "ERROR: Failed to auto-approve certificate: `$_"
+            Write-Log "ERROR: Failed to use PowerShell Remoting for certificate signing: `$_"
             Write-Log "Exception: `$(`$_.Exception.Message)"
-            Write-Log "You may need to manually approve request ID `$requestId on the root CA"
-        }
-
-        # Wait for certificate to be processed
-        Start-Sleep -Seconds 5
-
-        # Retrieve and install the issued certificate
-        `$certFile = "C:\$caCommonName.crt"
-        `$retrieveOutput = certreq -retrieve -config "`$rootCAName" `$requestId "`$certFile" 2>&1
-        Write-Log "certreq retrieve output: `$retrieveOutput"
-
-        if (Test-Path `$certFile) {
-            Write-Log "Certificate file retrieved: `$certFile"
-            `$installOutput = certutil -installcert "`$certFile" 2>&1
-            Write-Log "certutil output: `$installOutput"
-            Write-Log "Subordinate CA certificate installed successfully"
-
-            # Start CA service
-            Start-Service -Name CertSvc -ErrorAction SilentlyContinue
-            Write-Log "Certificate Authority service started"
-        } else {
-            Write-Log "ERROR: Certificate file not found after retrieval at `$certFile"
+            Write-Log "Falling back to manual certificate installation"
+            Write-Log "You may need to:"
+            Write-Log "  1. Manually approve the request on the DC"
+            Write-Log "  2. Export the signed certificate from the DC"
+            Write-Log "  3. Copy it to the ADCS server and install with: certutil -installcert <file>"
         }
     } else {
         Write-Log "ERROR: No certificate request file found"
