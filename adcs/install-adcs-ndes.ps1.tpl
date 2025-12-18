@@ -98,20 +98,22 @@ try {
     # Check if already has correct name and domain membership
     if ($isDomainJoined -and $currentDomain -eq $domainFQDN -and $currentHostname -eq $computerName) {
         Write-Log "Machine already has correct name ($computerName) and is joined to $domainFQDN"
-        Write-Log "Skipping domain join step, continuing with ADCS installation..."
-        # Don't exit, continue to schedule Part 2 below
-    } else {
-        Write-Log "Domain join required..."
-
-        # Create credential object
-        $securePassword = ConvertTo-SecureString $domainPassword -AsPlainText -Force
-        $credential = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", $securePassword)
-
-        # Rename computer and join domain in single operation
-        Add-Computer -DomainName $domainFQDN -NewName $computerName -Credential $credential -Force -ErrorAction Stop
-        Write-Log "Successfully renamed to $computerName and joined domain $domainFQDN"
-        Write-Log "System will reboot to complete domain join..."
+        Write-Log "Skipping domain join and reboot - domain membership already complete"
+        Write-Log "ADCS installation should have already been attempted via scheduled task"
+        Write-Log "If ADCS is not installed, check C:\ADCSInstall-Part2.ps1 log"
+        exit 0
     }
+
+    Write-Log "Domain join required..."
+
+    # Create credential object
+    $securePassword = ConvertTo-SecureString $domainPassword -AsPlainText -Force
+    $credential = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", $securePassword)
+
+    # Rename computer and join domain in single operation
+    Add-Computer -DomainName $domainFQDN -NewName $computerName -Credential $credential -Force -ErrorAction Stop
+    Write-Log "Successfully renamed to $computerName and joined domain $domainFQDN"
+    Write-Log "System will reboot to complete domain join..."
 
     # Schedule ADCS installation to run after reboot
     $scriptPath = "C:\ADCSInstall-Part2.ps1"
@@ -181,41 +183,78 @@ try {
 Write-Log "Step 5: Requesting subordinate CA certificate from root CA..."
 
 try {
-    # Get the certificate request file
-    `$requestFile = "C:\Windows\system32\CertSrv\CertEnroll\`$caCommonName.req"
+    # Find the certificate request file - it could be in multiple locations with different naming patterns
+    `$requestFile = `$null
 
-    if (Test-Path `$requestFile) {
-        Write-Log "Certificate request file found: `$requestFile"
+    # Pattern 1: C:\<hostname>_<CA-Name>.req
+    `$pattern1 = "C:\*_$caCommonName.req"
+    `$reqFiles1 = Get-ChildItem -Path `$pattern1 -ErrorAction SilentlyContinue
 
+    # Pattern 2: C:\Windows\system32\CertSrv\CertEnroll\<CA-Name>.req
+    `$pattern2 = "C:\Windows\system32\CertSrv\CertEnroll\$caCommonName.req"
+
+    # Pattern 3: Any .req file in CertEnroll directory
+    `$reqFiles3 = Get-ChildItem -Path "C:\Windows\system32\CertSrv\CertEnroll\*.req" -ErrorAction SilentlyContinue
+
+    if (`$reqFiles1 -and `$reqFiles1.Count -gt 0) {
+        `$requestFile = `$reqFiles1[0].FullName
+        Write-Log "Certificate request file found (pattern 1): `$requestFile"
+    } elseif (Test-Path `$pattern2) {
+        `$requestFile = `$pattern2
+        Write-Log "Certificate request file found (pattern 2): `$requestFile"
+    } elseif (`$reqFiles3 -and `$reqFiles3.Count -gt 0) {
+        `$requestFile = `$reqFiles3[0].FullName
+        Write-Log "Certificate request file found (pattern 3): `$requestFile"
+    }
+
+    if (`$requestFile) {
         # Submit request to root CA on domain controller
         `$rootCAName = "$dcFQDN\\$domainName-CA"
         Write-Log "Submitting request to root CA: `$rootCAName"
 
-        `$certReq = certreq -submit -config "`$rootCAName" `$requestFile
-        Write-Log "Certificate request submitted"
+        `$submitOutput = certreq -submit -config "`$rootCAName" "`$requestFile" 2>&1
+        Write-Log "certreq output: `$submitOutput"
+
+        # Parse request ID from output
+        `$requestId = `$null
+        if (`$submitOutput -match "RequestId:\s*(\d+)") {
+            `$requestId = `$Matches[1]
+            Write-Log "Certificate request ID: `$requestId"
+        } else {
+            Write-Log "Could not parse request ID from output, using default ID 2"
+            `$requestId = "2"
+        }
 
         # Wait for certificate to be issued
         Start-Sleep -Seconds 5
 
         # Retrieve and install the issued certificate
-        `$certFile = "C:\Windows\system32\CertSrv\CertEnroll\`$caCommonName.crt"
-        certreq -retrieve -config "`$rootCAName" 1 `$certFile
+        `$certFile = "C:\$caCommonName.crt"
+        `$retrieveOutput = certreq -retrieve -config "`$rootCAName" `$requestId "`$certFile" 2>&1
+        Write-Log "certreq retrieve output: `$retrieveOutput"
 
         if (Test-Path `$certFile) {
-            certutil -installcert `$certFile
+            Write-Log "Certificate file retrieved: `$certFile"
+            `$installOutput = certutil -installcert "`$certFile" 2>&1
+            Write-Log "certutil output: `$installOutput"
             Write-Log "Subordinate CA certificate installed successfully"
 
             # Start CA service
-            Start-Service -Name CertSvc
+            Start-Service -Name CertSvc -ErrorAction SilentlyContinue
             Write-Log "Certificate Authority service started"
         } else {
-            Write-Log "ERROR: Certificate file not found after retrieval"
+            Write-Log "ERROR: Certificate file not found after retrieval at `$certFile"
         }
     } else {
-        Write-Log "ERROR: Certificate request file not found"
+        Write-Log "ERROR: No certificate request file found"
+        Write-Log "Searched locations:"
+        Write-Log "  - C:\*_$caCommonName.req"
+        Write-Log "  - C:\Windows\system32\CertSrv\CertEnroll\$caCommonName.req"
+        Write-Log "  - C:\Windows\system32\CertSrv\CertEnroll\*.req"
     }
 } catch {
     Write-Log "ERROR requesting/installing CA certificate: `$_"
+    Write-Log "Exception details: `$(`$_.Exception.Message)"
 }
 
 #--------------------------------------------------------------
