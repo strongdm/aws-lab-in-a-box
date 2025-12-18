@@ -115,4 +115,81 @@ locals {
     class   = "adcs"
     Name    = "sdm-${var.name}-adcs-ndes"
   })
+
+  # Render the full PowerShell installation script
+  install_adcs_rendered = templatefile("${path.module}/install-adcs-ndes.ps1.tpl", {
+    computer_name             = local.computer_name
+    domain_name               = var.domain_name
+    domain_fqdn               = local.domain_fqdn
+    dc_ip                     = var.dc_ip
+    dc_fqdn                   = var.dc_fqdn
+    domain_admin_user         = var.domain_admin_user
+    domain_password           = var.domain_password
+    ca_common_name            = local.ca_common_name
+    certificate_template_name = var.certificate_template_name
+    ndes_service_account      = var.ndes_service_account
+  })
+
+  # Minimal bootstrap script that downloads and executes the full script from S3
+  # This keeps user_data small to avoid the 16KB limit
+  bootstrap_script = <<-EOT
+    <persist>true</persist>
+    <powershell>
+    # Bootstrap script to download and execute the full ADCS installation script from S3
+    # Script Hash: ${md5(local.install_adcs_rendered)}
+    # This hash ensures user_data changes when configuration changes
+
+    $bucketName = "${aws_s3_bucket.adcs_scripts.id}"
+    $scriptKey = "install-adcs.ps1"
+    $scriptPath = "C:\install-adcs.ps1"
+    $logPath = "C:\bootstrap.log"
+
+    Start-Transcript -Path $logPath -Append
+    "Starting ADCS installation bootstrap at $(Get-Date)"
+
+    # Check if setup is already complete
+    if (Test-Path "C:\ADCSSetup.done") {
+        "ADCS setup already completed. Exiting bootstrap."
+        Stop-Transcript
+        exit 0
+    }
+
+    try {
+        # Get region from instance metadata
+        $region = Invoke-RestMethod -Uri "http://169.254.169.254/latest/meta-data/placement/region" -TimeoutSec 5
+        "Instance region: $region"
+
+        # Check if AWS Tools for PowerShell is available
+        "Checking for AWS Tools for PowerShell..."
+        $awsToolsAvailable = $null -ne (Get-Command -Name Read-S3Object -ErrorAction SilentlyContinue)
+
+        if (-not $awsToolsAvailable) {
+            "AWS Tools not found. Installing AWS.Tools.S3..."
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+            Install-Module -Name AWS.Tools.S3 -Force -AllowClobber
+            Import-Module AWS.Tools.S3
+            "AWS Tools installed successfully"
+        } else {
+            "AWS Tools already available"
+        }
+
+        # Download the installation script from S3 using IAM instance profile credentials
+        "Downloading installation script from s3://$bucketName/$scriptKey"
+        Read-S3Object -BucketName $bucketName -Key $scriptKey -File $scriptPath -Region $region
+        "Script downloaded successfully"
+
+        # Execute the installation script
+        "Executing installation script..."
+        & PowerShell.exe -ExecutionPolicy Bypass -File $scriptPath
+        "Installation script completed"
+    } catch {
+        "ERROR: Bootstrap failed: $_"
+        "Exception: $($_.Exception.Message)"
+        exit 1
+    }
+
+    Stop-Transcript
+    </powershell>
+  EOT
 }

@@ -6,6 +6,17 @@ This module deploys a Windows Server 2019 instance configured with Active Direct
 
 The ADCS/NDES server provides automated certificate issuance for StrongDM gateways and relays using the SCEP (Simple Certificate Enrollment Protocol) protocol. This enables certificate-based authentication without manual certificate management.
 
+### Architecture
+
+The module uses an S3 bucket to store and deliver the PowerShell installation script to avoid AWS's 16KB user_data size limit:
+
+1. **S3 Bucket**: Created to store the full installation script
+2. **IAM Role**: EC2 instance profile with S3 read permissions
+3. **Bootstrap Script**: Minimal user_data that downloads and executes the full script from S3
+4. **Installation Script**: Complete ADCS/NDES configuration stored as S3 object
+
+This approach ensures the module can handle large, complex installation scripts without hitting platform limitations.
+
 ### What Gets Configured
 
 1. **Domain Join**: Server joins the Active Directory domain
@@ -31,14 +42,22 @@ The ADCS/NDES server provides automated certificate issuance for StrongDM gatewa
 The ADCS server security group must allow:
 
 - **Inbound**:
-  - Port 80 (HTTP) from StrongDM gateways/relays for SCEP enrollment
-  - Port 443 (HTTPS) optional, for secure SCEP (recommended for production)
+  - Port 443 (HTTPS) from StrongDM gateways/relays for secure SCEP enrollment
+  - Port 80 (HTTP) optional, if not using HTTPS
   - Port 445 (SMB) from DC for certificate request submission
   - Port 3389 (RDP) for administrative access
   - Standard AD ports for domain membership (see domain controller module)
 
 - **Outbound**:
+  - Port 443 (HTTPS) to AWS S3 endpoints for downloading installation scripts
   - All traffic (for Windows Updates, domain communication, etc.)
+
+### IAM Requirements
+
+The module automatically creates:
+- **IAM Role**: Allows EC2 instance to assume role
+- **IAM Policy**: Grants S3 read access to the scripts bucket
+- **Instance Profile**: Attaches the role to the EC2 instance
 
 ## Usage
 
@@ -114,25 +133,22 @@ After the ADCS/NDES server is deployed, configure StrongDM gateways and relays t
 
 ### Linux Gateways
 
-1. **Trust the CA certificate chain**:
-   ```bash
-   # Copy CA certificate from Domain Controller to gateway
-   sudo cp ca-certificate.pem /usr/local/share/ca-certificates/europa-ca.crt
-   sudo update-ca-certificates
-   ```
+Gateways and relays deployed in the domain automatically trust the domain CA and use AD DNS for name resolution. No manual certificate installation is required.
 
-2. **Configure gateway environment variables**:
-   ```bash
-   # Edit /etc/sysconfig/sdm-proxy
-   SDM_ADCS_URL=http://<adcs-private-ip>/certsrv/mscep/mscep.dll
-   SDM_ADCS_USER=Administrator@europa.local
-   SDM_ADCS_PW=<domain-admin-password>
-   ```
+**Configure gateway environment variables**:
+```bash
+# Edit /etc/sysconfig/sdm-proxy
+SDM_ADCS_URL=https://Europa-adcs.europa.local/certsrv/mscep/mscep.dll
+SDM_ADCS_USER=Administrator@europa.local
+SDM_ADCS_PW=<domain-admin-password>
+```
 
-3. **Restart gateway**:
-   ```bash
-   sudo systemctl restart sdm-proxy
-   ```
+**Note**: The NDES URL uses HTTPS with the server's FQDN. The gateway resolves this via AD DNS and trusts the certificate issued by the domain's root CA.
+
+**Restart gateway**:
+```bash
+sudo systemctl restart sdm-proxy
+```
 
 ### Verification
 
