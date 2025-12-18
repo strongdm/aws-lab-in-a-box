@@ -232,32 +232,49 @@ try {
             # Submit and approve the certificate request on DC
             Write-Log "Submitting and approving certificate on DC..."
             `$signResult = Invoke-Command -Session `$session -ScriptBlock {
-                param(`$reqFile, `$caName)
+                param(`$reqFilePath, `$caName)
 
-                # Submit the request
-                `$output = certreq -submit -config "`$caName" `$reqFile 2>&1 | Out-String
-
-                # Parse request ID from output
-                if (`$output -match "RequestId:\s*(\d+)") {
-                    `$reqId = `$Matches[1]
-
-                    # Since auto-approval is enabled (RequestDisposition=1), cert should be issued
-                    # Just retrieve it
-                    certreq -retrieve -config "`$caName" `$reqId "C:\temp-ca-cert.crt" 2>&1 | Out-Null
-
-                    return @{
-                        Success = (Test-Path "C:\temp-ca-cert.crt")
-                        RequestId = `$reqId
-                        Output = `$output
-                    }
-                } else {
-                    return @{
-                        Success = `$false
-                        RequestId = `$null
-                        Output = `$output
-                    }
+                `$result = @{
+                    Success = `$false
+                    RequestId = `$null
+                    Output = ""
                 }
-            } -ArgumentList `$requestFile, `$rootCAName
+
+                try {
+                    # Import the certificate request into the CA database
+                    # This submits it directly to the CA service running locally
+                    `$submitCmd = "certreq.exe -config ```"`$caName```" -submit ```"`$reqFilePath```""
+                    `$submitOutput = cmd /c `$submitCmd 2>&1
+
+                    `$result.Output = `$submitOutput -join "`n"
+
+                    # Parse request ID from output
+                    if (`$result.Output -match "RequestId:\s*(\d+)") {
+                        `$reqId = `$Matches[1]
+                        `$result.RequestId = `$reqId
+
+                        # Wait a moment for auto-approval to process
+                        Start-Sleep -Seconds 2
+
+                        # Retrieve the issued certificate
+                        `$retrieveOutput = certreq.exe -retrieve -config "`$caName" `$reqId "C:\temp-ca-cert.crt" 2>&1
+
+                        if (Test-Path "C:\temp-ca-cert.crt") {
+                            `$result.Success = `$true
+                            `$result.Output += "`nCertificate retrieved successfully"
+                        } else {
+                            `$result.Output += "`nERROR: Certificate file not created after retrieval"
+                            `$result.Output += "`nRetrieve output: " + (`$retrieveOutput -join "`n")
+                        }
+                    } else {
+                        `$result.Output += "`nERROR: Could not parse RequestId from certreq output"
+                    }
+                } catch {
+                    `$result.Output += "`nEXCEPTION: `$(`$_.Exception.Message)"
+                }
+
+                return `$result
+            } -ArgumentList "C:\temp-ca-request.req", `$rootCAName -AsJob | Wait-Job -Timeout 30 | Receive-Job
 
             Write-Log "Sign result: Success=`$(`$signResult.Success), RequestID=`$(`$signResult.RequestId)"
             Write-Log "Output: `$(`$signResult.Output)"
