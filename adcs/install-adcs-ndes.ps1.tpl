@@ -77,7 +77,7 @@ try {
 #--------------------------------------------------------------
 # Step 2: Rename Computer and Join Active Directory Domain
 #--------------------------------------------------------------
-Write-Log "Step 2: Renaming computer and joining domain $domainFQDN..."
+Write-Log "Step 2: Checking domain membership and hostname..."
 
 try {
     # Get current hostname
@@ -85,14 +85,33 @@ try {
     Write-Log "Current hostname: $currentHostname"
     Write-Log "Target hostname: $computerName"
 
-    # Create credential object
-    $securePassword = ConvertTo-SecureString $domainPassword -AsPlainText -Force
-    $credential = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", $securePassword)
+    # Check if already domain-joined
+    $computerSystem = Get-WmiObject Win32_ComputerSystem
+    $isDomainJoined = $computerSystem.PartOfDomain
+    $currentDomain = $computerSystem.Domain
 
-    # Rename computer and join domain in single operation
-    Add-Computer -DomainName $domainFQDN -NewName $computerName -Credential $credential -Force -ErrorAction Stop
-    Write-Log "Successfully renamed to $computerName and joined domain $domainFQDN"
-    Write-Log "System will reboot to complete domain join..."
+    Write-Log "Domain joined: $isDomainJoined"
+    if ($isDomainJoined) {
+        Write-Log "Current domain: $currentDomain"
+    }
+
+    # Check if already has correct name and domain membership
+    if ($isDomainJoined -and $currentDomain -eq $domainFQDN -and $currentHostname -eq $computerName) {
+        Write-Log "Machine already has correct name ($computerName) and is joined to $domainFQDN"
+        Write-Log "Skipping domain join step, continuing with ADCS installation..."
+        # Don't exit, continue to schedule Part 2 below
+    } else {
+        Write-Log "Domain join required..."
+
+        # Create credential object
+        $securePassword = ConvertTo-SecureString $domainPassword -AsPlainText -Force
+        $credential = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", $securePassword)
+
+        # Rename computer and join domain in single operation
+        Add-Computer -DomainName $domainFQDN -NewName $computerName -Credential $credential -Force -ErrorAction Stop
+        Write-Log "Successfully renamed to $computerName and joined domain $domainFQDN"
+        Write-Log "System will reboot to complete domain join..."
+    }
 
     # Schedule ADCS installation to run after reboot
     $scriptPath = "C:\ADCSInstall-Part2.ps1"
@@ -134,6 +153,7 @@ Write-Log "Step 4: Configuring ADCS as Enterprise Subordinate CA..."
 
 try {
     # Configure as Enterprise Subordinate CA
+    # Note: ValidityPeriod/ValidityPeriodUnits not used for subordinate CA - validity comes from parent CA
     Install-AdcsCertificationAuthority ``
         -CAType EnterpriseSubordinateCA ``
         -CACommonName "$caCommonName" ``
@@ -141,8 +161,6 @@ try {
         -CryptoProviderName "RSA#Microsoft Software Key Storage Provider" ``
         -KeyLength 2048 ``
         -HashAlgorithmName SHA256 ``
-        -ValidityPeriod Years ``
-        -ValidityPeriodUnits 5 ``
         -Force ``
         -ErrorAction Stop
 
