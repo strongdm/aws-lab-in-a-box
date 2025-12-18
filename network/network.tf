@@ -296,6 +296,9 @@ resource "aws_vpc_security_group_ingress_rule" "allow_ldap_tcp" {
   })
 }
 
+# Global Catalog ports (3268/3269) - Required for SSSD enumeration on Linux targets
+# These ports allow domain-joined Linux machines to enumerate AD groups and resolve
+# group names instead of showing numeric GIDs
 resource "aws_vpc_security_group_ingress_rule" "allow_gc_tcp" {
   count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
   security_group_id = aws_security_group.relay.id
