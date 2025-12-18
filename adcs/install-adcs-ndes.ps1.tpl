@@ -208,36 +208,13 @@ try {
     }
 
     if (`$requestFile) {
-        # Submit request to root CA on domain controller
         `$rootCAName = "$dcFQDN\\$domainName-CA"
-        Write-Log "Submitting request to root CA: `$rootCAName"
-
-        `$submitOutput = certreq -submit -config "`$rootCAName" "`$requestFile" 2>&1
-        Write-Log "certreq output: `$submitOutput"
-
-        # Parse request ID from output
-        `$requestId = `$null
-        if (`$submitOutput -match "RequestId:\s*(\d+)") {
-            `$requestId = `$Matches[1]
-            Write-Log "Certificate request ID: `$requestId"
-        } else {
-            Write-Log "Could not parse request ID from output, checking for pending requests..."
-            # Try to get the latest pending request ID
-            `$pendingOutput = certutil -config "`$rootCAName" -view -restrict "Disposition=9" -out "RequestID" 2>&1
-            if (`$pendingOutput -match "Row\s+\d+:.*RequestID:\s*(\d+)") {
-                `$requestId = `$Matches[1]
-                Write-Log "Found pending request ID: `$requestId"
-            } else {
-                Write-Log "Using default ID 2"
-                `$requestId = "2"
-            }
-        }
-
-        Write-Log "Request ID to process: `$requestId"
+        Write-Log "Found certificate request file: `$requestFile"
 
         # Use PowerShell Remoting (WinRM) to sign certificate on DC
         # This avoids RPC issues when CA service is not running on ADCS server
-        Write-Log "Using PowerShell Remoting to sign certificate on DC..."
+        Write-Log "Using PowerShell Remoting to submit and sign certificate on DC..."
+        Write-Log "Root CA: `$rootCAName"
 
         try {
             # Create credential object for domain admin
