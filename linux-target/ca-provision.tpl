@@ -189,13 +189,58 @@ echo "Copying SSHCA ${sshca} to /etc/ssh/sdm_ca.pub" | logger -t sdminstall
 echo "${sshca}" | sudo tee -a /etc/ssh/sdm_ca.pub
 echo "Setting SSH CA permissions" | logger -t sdminstall
 chmod 600 /etc/ssh/sdm_ca.pub
+
+%{ if has_domain_controller }
+#--------------------------------------------------------------
+# Configure SSH to allow any valid domain user via AuthorizedPrincipalsCommand
+#--------------------------------------------------------------
+echo "Configuring SSH to allow domain users via AuthorizedPrincipalsCommand" | logger -t sdminstall
+
+# Create a script that returns "strongdm" principal for any authenticated user
+cat > /usr/local/bin/sdm-principals.sh <<'EOFSCRIPT'
+#!/bin/bash
+# This script returns the "strongdm" principal for SSH certificate authentication
+# It is called by sshd for each SSH connection attempt
+# For domain-joined machines, all valid domain users are allowed
+echo "strongdm"
+EOFSCRIPT
+
+chmod 755 /usr/local/bin/sdm-principals.sh
+echo "Created AuthorizedPrincipalsCommand script" | logger -t sdminstall
+
+# Configure SSH to use the principals command instead of per-user files
+cat > /etc/ssh/sshd_config.d/100-strongdm.conf <<'EOFSSHD'
+# StrongDM SSH Certificate Authentication Configuration
+TrustedUserCAKeys /etc/ssh/sdm_ca.pub
+
+# Use AuthorizedPrincipalsCommand to dynamically return "strongdm" principal
+# This allows any valid domain user to authenticate without creating per-user files
+AuthorizedPrincipalsCommand /usr/local/bin/sdm-principals.sh
+AuthorizedPrincipalsCommandUser nobody
+EOFSSHD
+
+echo "Configured SSH with AuthorizedPrincipalsCommand for domain users" | logger -t sdminstall
+
+%{ else }
+#--------------------------------------------------------------
+# Configure SSH with per-user principals file (non-domain joined)
+#--------------------------------------------------------------
 echo "Enabling $TARGET_USER to login using SSH CA" | logger -t sdminstall
-mkdir /etc/ssh/sdm_users
-sudo echo "strongdm" > /etc/ssh/sdm_users/$TARGET_USER
+mkdir -p /etc/ssh/sdm_users
+echo "strongdm" > /etc/ssh/sdm_users/$TARGET_USER
+
 echo "Reconfiguring SSHD" | logger -t sdminstall
-echo "TrustedUserCAKeys /etc/ssh/sdm_ca.pub" | sudo tee -a /etc/ssh/sshd_config.d/100-strongdm.conf
-echo "AuthorizedPrincipalsFile /etc/ssh/sdm_users/%u" | sudo tee -a /etc/ssh/sshd_config.d/100-strongdm.conf
+cat > /etc/ssh/sshd_config.d/100-strongdm.conf <<EOFSSHD
+# StrongDM SSH Certificate Authentication Configuration
+TrustedUserCAKeys /etc/ssh/sdm_ca.pub
+
+# Use per-user principals file
+AuthorizedPrincipalsFile /etc/ssh/sdm_users/%u
+EOFSSHD
+
+echo "Configured SSH with AuthorizedPrincipalsFile for local user $TARGET_USER" | logger -t sdminstall
+%{ endif }
+
 echo "Restarting SSHD" | logger -t sdminstall
 systemctl restart ssh
 echo "StrongDM target configuration done" | logger -t sdminstall
-sudo systemctl restart ssh

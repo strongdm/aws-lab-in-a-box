@@ -4,7 +4,9 @@ This module deploys a Windows Server 2019 instance configured with Active Direct
 
 ## Overview
 
-The ADCS/NDES server provides automated certificate issuance for StrongDM gateways and relays using the SCEP (Simple Certificate Enrollment Protocol) protocol. This enables certificate-based authentication without manual certificate management.
+The ADCS/NDES server provides automated certificate issuance for StrongDM **Windows resources** using the SCEP (Simple Certificate Enrollment Protocol) protocol. This enables certificate-based authentication for Windows machines without manual certificate management.
+
+**Important**: ADCS is used exclusively for Windows machine authentication. For Linux SSH servers, use StrongDM's built-in CA with SSH certificate authentication instead.
 
 ### Architecture
 
@@ -127,28 +129,30 @@ module "adcs" {
 | domain_admin_user | Domain admin username for SDM_ADCS_USER |
 | tagset | Tags applied to resources |
 
-## StrongDM Gateway Configuration
+## StrongDM Integration
 
-After the ADCS/NDES server is deployed, configure StrongDM gateways and relays to use it for certificate-based authentication:
+After the ADCS/NDES server is deployed, you need to:
 
-### Linux Gateways
+1. **Register the ADCS as a Secret Store** in StrongDM (Active Directory type)
+2. **Configure Windows resources** to use certificate authentication
+3. **Trust the CA certificate** on any Windows clients connecting via RDP
 
-Gateways and relays deployed in the domain automatically trust the domain CA and use AD DNS for name resolution. No manual certificate installation is required.
+### Active Directory Secret Store Configuration
 
-**Configure gateway environment variables**:
-```bash
-# Edit /etc/sysconfig/sdm-proxy
-SDM_ADCS_URL=https://Europa-adcs.europa.local/certsrv/mscep/mscep.dll
-SDM_ADCS_USER=Administrator@europa.local
-SDM_ADCS_PW=<domain-admin-password>
+The ADCS server should be registered as an Active Directory secret store in StrongDM:
+
+```hcl
+resource "sdm_secret_store" "adcs" {
+  active_directory_store {
+    name           = "Europa-ADCS"
+    server_address = "https://Europa-adcs.europa.local/"
+  }
+}
 ```
 
-**Note**: The NDES URL uses HTTPS with the server's FQDN. The gateway resolves this via AD DNS and trusts the certificate issued by the domain's root CA.
+### Windows Resource Configuration
 
-**Restart gateway**:
-```bash
-sudo systemctl restart sdm-proxy
-```
+Configure Windows Server resources in StrongDM to use the ADCS secret store for certificate-based RDP authentication. The certificates will be automatically enrolled via SCEP when users connect.
 
 ### Verification
 

@@ -17,8 +17,31 @@ The module provisions:
 The Linux target setup includes:
 1. **Base System Configuration**: Ubuntu instance deployment with security updates
 2. **SSH Configuration**: Configuring SSH to trust the StrongDM CA
-3. **User Authorization**: Setting up authorized principals for the target user
+3. **User Authorization**: Configuring SSH certificate principals
+   - **Domain-joined machines**: Uses `AuthorizedPrincipalsCommand` to dynamically allow all domain users
+   - **Standalone machines**: Uses `AuthorizedPrincipalsFile` with per-user principal files
 4. **Security Hardening**: Disabling password authentication and firewall setup
+
+### SSH Certificate Authentication
+
+This module configures SSH certificate authentication using StrongDM's SSH CA. The principal configuration differs based on whether the machine is domain-joined:
+
+#### Domain-Joined Machines (Active Directory)
+
+When `domain_name` is provided, the module:
+- Joins the machine to the Active Directory domain
+- Creates an `AuthorizedPrincipalsCommand` script at `/usr/local/bin/sdm-principals.sh`
+- Configures SSH to dynamically return the "strongdm" principal for any user
+- **Benefit**: All domain users can authenticate without creating individual principal files
+
+The command-based approach eliminates the need to manually create `/etc/ssh/sdm_users/<username>` files for each domain user.
+
+#### Standalone Machines (No Domain)
+
+For non-domain-joined machines:
+- Creates `/etc/ssh/sdm_users/<target_user>` containing "strongdm" principal
+- Configures SSH with `AuthorizedPrincipalsFile /etc/ssh/sdm_users/%u`
+- Only the specified `target_user` can authenticate via SSH certificates
 
 ## Use Cases for Partner Training
 

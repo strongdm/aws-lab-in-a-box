@@ -54,3 +54,14 @@ output "tagset" {
   description = "Tags applied to the ADCS/NDES resources"
   value       = local.thistagset
 }
+
+output "admin_username" {
+  description = "Local administrator username for RDP access"
+  value       = "Administrator"
+}
+
+output "admin_password" {
+  description = "Encrypted password data for the local administrator account (requires private key to decrypt)"
+  value       = aws_instance.adcs.password_data
+  sensitive   = true
+}
