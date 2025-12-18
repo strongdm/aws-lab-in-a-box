@@ -23,12 +23,15 @@ This approach ensures the module can handle large, complex installation scripts 
 
 1. **Domain Join**: Server joins the Active Directory domain
 2. **ADCS Installation**: Installed as Enterprise Subordinate CA
-3. **CA Certificate Chain**: Subordinate CA certificate requested and installed from root CA on DC
+3. **CA Certificate Chain**: Subordinate CA certificate requested and automatically approved by root CA on DC
+   - **Note**: Root CA must be configured with `RequestDisposition=1` for automatic approval
+   - DC module versions 2.1.14+ include this configuration by default
 4. **NDES Installation**: Configured with IIS and Basic Authentication
 5. **Certificate Template**: Custom "StrongDM" template created (based on Smart Card Logon)
 6. **Registry Configuration**: MSCEP registry keys set to use StrongDM template
 7. **IIS Configuration**: Basic Authentication enabled, SCEP Application Pool set to Integrated mode
-8. **Template Permissions**: Certificate template configured with appropriate permissions
+8. **HTTPS Configuration**: IIS configured with SSL using machine certificate
+9. **Template Permissions**: Certificate template configured with appropriate permissions
 
 ## Requirements
 
@@ -214,23 +217,42 @@ Get-Content C:\ADCSSetup.log -Tail 50
 
 ### Common Issues
 
-**1. Certificate request fails**
+**1. Subordinate CA certificate request pending (not auto-approved)**
+
+If the installation logs show the certificate request is stuck in "pending" status:
+
+```powershell
+# On the DC, configure auto-approval (if not already set)
+certutil -setreg policy\RequestDisposition 1
+Restart-Service certsvc
+
+# Verify the setting
+certutil -getreg policy\RequestDisposition
+# Should show: RequestDisposition REG_DWORD = 1 (256.)
+```
+
+Or manually approve the pending request:
+1. Open Certification Authority console (`certsrv.msc`) on the DC
+2. Expand the CA name → Click **Pending Requests**
+3. Right-click the request → **All Tasks** → **Issue**
+
+**2. Certificate request fails**
 - Verify DC FQDN is correct
 - Check network connectivity to DC
 - Ensure root CA is online: `certutil -ping`
 
-**2. NDES not accessible**
+**3. NDES not accessible**
 - Check IIS is running: `iisreset /status`
 - Verify Basic Auth is enabled in IIS Manager
 - Check Windows Firewall rules
 
-**3. StrongDM gateway can't enroll**
+**4. StrongDM gateway can't enroll**
 - Verify NDES URL is correct
-- Check gateway can reach ADCS server (HTTP port 80)
+- Check gateway can reach ADCS server (HTTPS port 443)
 - Verify credentials (SDM_ADCS_USER/PW) are correct
 - Ensure gateway trusts the CA certificate chain
 
-**4. Template not found**
+**5. Template not found**
 - Check template exists: `certutil -template StrongDM`
 - Verify template was added to CA: `certutil -CATemplates`
 - Restart CA service: `Restart-Service CertSvc`

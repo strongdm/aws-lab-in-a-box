@@ -236,20 +236,20 @@ try {
         Write-Log "Request ID to process: `$requestId"
 
         # Auto-approve the certificate request on the root CA
+        # Use certutil -resubmit with -config to target the remote CA
         Write-Log "Auto-approving certificate request on root CA..."
-        `$securePassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
-        `$credential = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", `$securePassword)
-
-        # Run certutil -resubmit on the DC to approve the pending request
-        `$approveScript = {
-            param(`$rid)
-            certutil -resubmit `$rid 2>&1
-        }
 
         try {
-            Write-Log "Invoking approval command on `$dcFQDN..."
-            `$approveOutput = Invoke-Command -ComputerName "$dcFQDN" -Credential `$credential -ScriptBlock `$approveScript -ArgumentList `$requestId 2>&1
+            Write-Log "Running: certutil -config `"`$rootCAName`" -resubmit `$requestId"
+            `$approveOutput = certutil -config "`$rootCAName" -resubmit `$requestId 2>&1
             Write-Log "Approval output: `$approveOutput"
+
+            if (`$LASTEXITCODE -eq 0) {
+                Write-Log "Certificate request approved successfully"
+            } else {
+                Write-Log "WARNING: certutil -resubmit returned exit code `$LASTEXITCODE"
+                Write-Log "This may indicate the request was already approved or there was an error"
+            }
         } catch {
             Write-Log "ERROR: Failed to auto-approve certificate: `$_"
             Write-Log "Exception: `$(`$_.Exception.Message)"
@@ -257,7 +257,7 @@ try {
         }
 
         # Wait for certificate to be processed
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds 5
 
         # Retrieve and install the issued certificate
         `$certFile = "C:\$caCommonName.crt"

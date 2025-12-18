@@ -94,6 +94,21 @@ if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and
                     -ValidityPeriod Years `
                     -ValidityPeriodUnits 10 `
                     -Force
+
+                # Configure CA policy to automatically issue certificates (including subordinate CA requests)
+                "Configuring CA policy for automatic certificate issuance..."
+                try {
+                    certutil -setreg policy\RequestDisposition 1
+                    "CA policy set to auto-issue certificates (RequestDisposition=1)"
+
+                    # Restart Certificate Services to apply the policy change
+                    Restart-Service certsvc -Force
+                    "Certificate Services restarted with new policy"
+                } catch {
+                    "WARNING: Failed to configure auto-issuance policy: $_"
+                    "Subordinate CA requests may require manual approval"
+                }
+
             "ADCS Set up." | Out-File "C:\adcs.done"
             }
             } else { "ADCS is already installed" }

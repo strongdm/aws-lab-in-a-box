@@ -181,6 +181,21 @@ if (((-not (Test-Path "C:\adcs.done")) -and (Test-Path "C:\addssetup.done") -and
                     -Force
 
                 "[DCInstall] ADCS configured successfully as Enterprise Root CA"
+
+                # Configure CA policy to automatically issue certificates (including subordinate CA requests)
+                "[DCInstall] Configuring CA policy for automatic certificate issuance..."
+                try {
+                    certutil -setreg policy\RequestDisposition 1
+                    "[DCInstall] CA policy set to auto-issue certificates (RequestDisposition=1)"
+
+                    # Restart Certificate Services to apply the policy change
+                    Restart-Service certsvc -Force
+                    "[DCInstall] Certificate Services restarted with new policy"
+                } catch {
+                    "[DCInstall] WARNING: Failed to configure auto-issuance policy: $_"
+                    "[DCInstall] Subordinate CA requests may require manual approval"
+                }
+
                 "ADCS Set up." | Out-File "C:\adcs.done"
                 $adcsConfigured = $true
             } catch {
