@@ -296,6 +296,20 @@ resource "aws_vpc_security_group_ingress_rule" "allow_ldap_tcp" {
   })
 }
 
+resource "aws_vpc_security_group_ingress_rule" "allow_gc_tcp" {
+  count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
+  security_group_id = aws_security_group.relay.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 3268
+  ip_protocol       = "tcp"
+  to_port           = 3269
+
+  tags = merge(var.tagset, {
+    network = "Private"
+    Name    = "${var.name}-private-sg"
+  })
+}
+
 resource "aws_vpc_security_group_ingress_rule" "allow_ldaps_tcp" {
   count             = var.create_windows_target || var.create_domain_controller ? 1 : 0
   security_group_id = aws_security_group.relay.id
