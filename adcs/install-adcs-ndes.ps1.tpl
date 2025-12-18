@@ -164,7 +164,7 @@ Write-Log "Step 5: Requesting subordinate CA certificate from root CA..."
 
 try {
     # Get the certificate request file
-    `$requestFile = "C:\Windows\system32\CertSrv\CertEnroll\${caCommonName}.req"
+    `$requestFile = "C:\Windows\system32\CertSrv\CertEnroll\`$caCommonName.req"
 
     if (Test-Path `$requestFile) {
         Write-Log "Certificate request file found: `$requestFile"
@@ -180,7 +180,7 @@ try {
         Start-Sleep -Seconds 5
 
         # Retrieve and install the issued certificate
-        `$certFile = "C:\Windows\system32\CertSrv\CertEnroll\${caCommonName}.crt"
+        `$certFile = "C:\Windows\system32\CertSrv\CertEnroll\`$caCommonName.crt"
         certreq -retrieve -config "`$rootCAName" 1 `$certFile
 
         if (Test-Path `$certFile) {
