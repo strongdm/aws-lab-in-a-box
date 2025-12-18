@@ -221,12 +221,43 @@ try {
             `$requestId = `$Matches[1]
             Write-Log "Certificate request ID: `$requestId"
         } else {
-            Write-Log "Could not parse request ID from output, using default ID 2"
-            `$requestId = "2"
+            Write-Log "Could not parse request ID from output, checking for pending requests..."
+            # Try to get the latest pending request ID
+            `$pendingOutput = certutil -config "`$rootCAName" -view -restrict "Disposition=9" -out "RequestID" 2>&1
+            if (`$pendingOutput -match "Row\s+\d+:.*RequestID:\s*(\d+)") {
+                `$requestId = `$Matches[1]
+                Write-Log "Found pending request ID: `$requestId"
+            } else {
+                Write-Log "Using default ID 2"
+                `$requestId = "2"
+            }
         }
 
-        # Wait for certificate to be issued
-        Start-Sleep -Seconds 5
+        Write-Log "Request ID to process: `$requestId"
+
+        # Auto-approve the certificate request on the root CA
+        Write-Log "Auto-approving certificate request on root CA..."
+        `$securePassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
+        `$credential = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", `$securePassword)
+
+        # Run certutil -resubmit on the DC to approve the pending request
+        `$approveScript = {
+            param(`$rid)
+            certutil -resubmit `$rid 2>&1
+        }
+
+        try {
+            Write-Log "Invoking approval command on `$dcFQDN..."
+            `$approveOutput = Invoke-Command -ComputerName "$dcFQDN" -Credential `$credential -ScriptBlock `$approveScript -ArgumentList `$requestId 2>&1
+            Write-Log "Approval output: `$approveOutput"
+        } catch {
+            Write-Log "ERROR: Failed to auto-approve certificate: `$_"
+            Write-Log "Exception: `$(`$_.Exception.Message)"
+            Write-Log "You may need to manually approve request ID `$requestId on the root CA"
+        }
+
+        # Wait for certificate to be processed
+        Start-Sleep -Seconds 10
 
         # Retrieve and install the issued certificate
         `$certFile = "C:\$caCommonName.crt"
