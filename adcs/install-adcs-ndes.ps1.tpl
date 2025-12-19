@@ -224,6 +224,7 @@ try {
             # Copy .req file to DC and sign it via PowerShell Remoting
             Write-Log "Copying certificate request to DC..."
             `$session = New-PSSession -ComputerName "$dcFQDN" -Credential `$domainCred
+            Write-Log "Session created (Session ID: `$(`$session.Id), State: `$(`$session.State))"
 
             # Copy the .req file to DC
             Copy-Item -Path "`$requestFile" -Destination "C:\temp-ca-request.req" -ToSession `$session
@@ -233,8 +234,9 @@ try {
             # Note: certreq -submit hangs but still creates the certificate in the background
             Write-Log "Submitting certificate request on DC (running in background)..."
 
-            # Start the submission job in the background
-            `$submitJob = Invoke-Command -Session `$session -ScriptBlock {
+            # Start the submission job in the background using -AsJob with computer name
+            # This keeps the session alive for polling
+            `$submitJob = Invoke-Command -ComputerName "$dcFQDN" -Credential `$domainCred -ScriptBlock {
                 param(`$reqFilePath, `$caName)
                 certreq.exe -config "`$caName" -submit "`$reqFilePath" "C:\temp-ca-cert.crt" 2>&1
             } -ArgumentList "C:\temp-ca-request.req", `$rootCAName -AsJob
@@ -252,8 +254,18 @@ try {
                 `$waited += 5
 
                 # Check if certificate file exists on DC
-                `$certExists = Invoke-Command -Session `$session -ScriptBlock {
-                    Test-Path "C:\temp-ca-cert.crt"
+                # Recreate session check to ensure it's still valid
+                try {
+                    `$certExists = Invoke-Command -Session `$session -ScriptBlock {
+                        Test-Path "C:\temp-ca-cert.crt"
+                    } -ErrorAction Stop
+                } catch {
+                    Write-Log "Session error during polling, reconnecting..."
+                    Remove-PSSession -Session `$session -ErrorAction SilentlyContinue
+                    `$session = New-PSSession -ComputerName "$dcFQDN" -Credential `$domainCred
+                    `$certExists = Invoke-Command -Session `$session -ScriptBlock {
+                        Test-Path "C:\temp-ca-cert.crt"
+                    }
                 }
 
                 if (`$certExists) {
