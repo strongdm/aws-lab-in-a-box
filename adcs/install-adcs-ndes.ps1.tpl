@@ -226,12 +226,21 @@ try {
             `$session = New-PSSession -ComputerName "$dcFQDN" -Credential `$domainCred
             Write-Log "Session created (Session ID: `$(`$session.Id), State: `$(`$session.State))"
 
+            # Clean up any old certificate files on DC first
+            Write-Log "Cleaning up old certificate files on DC..."
+            Invoke-Command -Session `$session -ScriptBlock {
+                Remove-Item -Path "C:\temp-ca-request.req" -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\temp-ca-cert.crt" -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\temp-ca-cert.rsp" -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\temp-ca-cert.p7b" -Force -ErrorAction SilentlyContinue
+            }
+
             # Copy the .req file to DC
             Copy-Item -Path "`$requestFile" -Destination "C:\temp-ca-request.req" -ToSession `$session
             Write-Log "Request file copied to DC"
 
             # Submit certificate request on DC
-            # Note: certreq -submit hangs but still creates the certificate in the background
+            # Note: certreq -submit may hang but still creates the certificate in the background
             Write-Log "Submitting certificate request on DC (running in background)..."
 
             # Start the submission job in the background using -AsJob with computer name
