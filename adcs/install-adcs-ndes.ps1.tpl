@@ -337,37 +337,29 @@ try {
                     Remove-Item -Path "C:\temp-ca-cert.crt" -Force -ErrorAction SilentlyContinue
                 }
 
-                # Install the certificate locally using domain admin credentials
+                # Install the certificate locally using domain admin credentials via PSExec-like approach
                 # This requires AD rights to publish the CA certificate
                 if (Test-Path `$certFile) {
                     Write-Log "Installing subordinate CA certificate with domain admin credentials..."
 
-                    # Create a scheduled task that runs as domain admin to install the certificate
-                    # This is necessary because certutil -installcert requires AD publication rights
-                    `$taskName = "InstallSubCACert"
-                    `$taskAction = New-ScheduledTaskAction -Execute "certutil.exe" -Argument "-installcert `"`$certFile`""
-                    `$taskPrincipal = New-ScheduledTaskPrincipal -UserId "$domainFQDN\$domainAdmin" -LogonType Password -RunLevel Highest
+                    # Use runas.exe with embedded credentials via a script
+                    # Create a temporary script that will be run as domain admin
+                    `$installScript = @"
+certutil.exe -installcert "`$certFile" 2>&1 | Out-File -FilePath C:\cert-install-output.txt -Encoding ASCII
+exit `$LASTEXITCODE
+"@
+                    `$installScriptPath = "C:\install-ca-cert.ps1"
+                    Set-Content -Path `$installScriptPath -Value `$installScript -Force
 
-                    Write-Log "Creating scheduled task to install certificate as domain admin..."
-                    Register-ScheduledTask -TaskName `$taskName -Action `$taskAction -Principal `$taskPrincipal -Force | Out-Null
+                    Write-Log "Running certificate installation as domain admin via PowerShell remoting to localhost..."
+                    try {
+                        # Use Invoke-Command to localhost with domain admin credentials
+                        `$installResult = Invoke-Command -ComputerName localhost -Credential `$domainCred -ScriptBlock {
+                            param(`$certPath)
+                            certutil.exe -installcert "`$certPath" 2>&1
+                        } -ArgumentList `$certFile
 
-                    Write-Log "Running certificate installation task..."
-                    `$taskPassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
-                    `$task = Get-ScheduledTask -TaskName `$taskName
-                    `$task.Principal.UserId = "$domainFQDN\$domainAdmin"
-                    `$task | Set-ScheduledTask -User "$domainFQDN\$domainAdmin" -Password "$domainPassword" | Out-Null
-
-                    Start-ScheduledTask -TaskName `$taskName
-                    Start-Sleep -Seconds 10
-
-                    # Check task result
-                    `$taskInfo = Get-ScheduledTaskInfo -TaskName `$taskName
-                    Write-Log "Task last run result: `$(`$taskInfo.LastTaskResult)"
-
-                    # Clean up task
-                    Unregister-ScheduledTask -TaskName `$taskName -Confirm:`$false
-
-                    if (`$taskInfo.LastTaskResult -eq 0) {
+                        Write-Log "Certificate installation output: `$installResult"
                         Write-Log "Subordinate CA certificate installed successfully"
 
                         # Start CA service
@@ -378,9 +370,35 @@ try {
                         Start-Sleep -Seconds 5
                         `$pingOutput = certutil -ping 2>&1
                         Write-Log "CA ping result: `$pingOutput"
-                    } else {
-                        Write-Log "ERROR: Certificate installation failed with code: `$(`$taskInfo.LastTaskResult)"
+
+                    } catch {
+                        Write-Log "ERROR installing certificate: `$_"
+                        Write-Log "Trying alternative method with PsExec approach..."
+
+                        # Fallback: Use schtasks.exe command line (more reliable than PowerShell cmdlets)
+                        `$schtaskCmd = "schtasks /create /tn InstallCACert /tr `"certutil.exe -installcert \`"`$certFile\`"`" /sc once /st 00:00 /ru `"$domainFQDN\$domainAdmin`" /rp `"$domainPassword`" /rl HIGHEST /f"
+                        Write-Log "Creating task: `$schtaskCmd"
+                        cmd.exe /c `$schtaskCmd 2>&1 | ForEach-Object { Write-Log "  `$_" }
+
+                        Write-Log "Running task..."
+                        schtasks /run /tn InstallCACert
+                        Start-Sleep -Seconds 10
+
+                        Write-Log "Checking task result..."
+                        `$taskResult = schtasks /query /tn InstallCACert /fo list /v
+                        Write-Log "`$taskResult"
+
+                        Write-Log "Deleting task..."
+                        schtasks /delete /tn InstallCACert /f
+
+                        # Try to start CA service
+                        Start-Service -Name CertSvc -ErrorAction Stop
+                        Write-Log "Certificate Authority service started"
                     }
+
+                    # Clean up temp script
+                    Remove-Item -Path `$installScriptPath -Force -ErrorAction SilentlyContinue
+
                 } else {
                     Write-Log "ERROR: Certificate file not found after copy from DC"
                 }
