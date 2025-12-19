@@ -355,8 +355,8 @@ exit `$LASTEXITCODE
                     try {
                         # Use Invoke-Command to localhost with domain admin credentials
                         `$installResult = Invoke-Command -ComputerName localhost -Credential `$domainCred -ScriptBlock {
-                            param(`$certPath)
-                            certutil.exe -installcert "`$certPath" 2>&1
+                            param($certPath)
+                            certutil.exe -installcert "$certPath" 2>&1
                         } -ArgumentList `$certFile
 
                         Write-Log "Certificate installation output: `$installResult"
