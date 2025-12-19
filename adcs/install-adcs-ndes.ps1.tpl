@@ -242,18 +242,47 @@ try {
             # Submit certificate request on DC
             # Note: certreq -submit may hang but still creates the certificate in the background
             Write-Log "Submitting certificate request on DC (running in background)..."
+            Write-Log "Creating background job with separate session to avoid parent session invalidation..."
 
-            # Start the submission job in the background using the existing session with -AsJob
-            # This uses the authenticated session context which works reliably
-            `$submitJob = Invoke-Command -Session `$session -ScriptBlock {
-                param(`$reqFilePath, `$caName)
-                certreq.exe -config "`$caName" -submit "`$reqFilePath" "C:\temp-ca-cert.crt" 2>&1
-            } -ArgumentList "C:\temp-ca-request.req", `$rootCAName -AsJob
+            # Start the submission job - use Start-Job with a scriptblock that creates its own session
+            # This avoids the issue where Invoke-Command -AsJob invalidates the parent session
+            `$submitJob = Start-Job -ScriptBlock {
+                param(`$dcFQDN, `$domainFQDN, `$domainAdmin, `$domainPassword, `$reqFilePath, `$caName)
 
-            Write-Log "Submission job started (Job ID: `$(`$submitJob.Id))"
+                # Create credential for job's own session
+                `$secPass = ConvertTo-SecureString `$domainPassword -AsPlainText -Force
+                `$cred = New-Object System.Management.Automation.PSCredential("`$domainFQDN\`$domainAdmin", `$secPass)
+
+                Write-Output "Job: Creating session to `$dcFQDN as `$domainFQDN\`$domainAdmin"
+                `$jobSession = New-PSSession -ComputerName `$dcFQDN -Credential `$cred -ErrorAction Stop
+                Write-Output "Job: Session created (ID: `$(`$jobSession.Id))"
+
+                try {
+                    Write-Output "Job: Submitting certificate request..."
+                    Write-Output "Job: Request file: `$reqFilePath"
+                    Write-Output "Job: CA Name: `$caName"
+
+                    `$result = Invoke-Command -Session `$jobSession -ScriptBlock {
+                        param(`$req, `$ca)
+                        Write-Output "Remote: Running certreq.exe -config `"`$ca`" -submit `"`$req`" C:\temp-ca-cert.crt"
+                        certreq.exe -config "`$ca" -submit "`$req" "C:\temp-ca-cert.crt" 2>&1
+                    } -ArgumentList `$reqFilePath, `$caName
+
+                    Write-Output "Job: certreq result: `$result"
+                } catch {
+                    Write-Output "Job ERROR: `$_"
+                    Write-Output "Job ERROR Details: `$(`$_.Exception.Message)"
+                } finally {
+                    Write-Output "Job: Closing session"
+                    Remove-PSSession -Session `$jobSession -ErrorAction Continue
+                }
+            } -ArgumentList "$dcFQDN", "$domainFQDN", "$domainAdmin", "$domainPassword", "C:\temp-ca-request.req", `$rootCAName
+
+            Write-Log "Submission job started (Job ID: `$(`$submitJob.Id), State: `$(`$submitJob.State))"
             Write-Log "Polling for certificate file (checking every 5 seconds, max 60 seconds)..."
 
             # Poll for the certificate file instead of waiting for command output
+            # Use the main session which remains intact since the job has its own session
             `$maxWait = 60
             `$waited = 0
             `$certCreated = `$false
@@ -262,19 +291,17 @@ try {
                 Start-Sleep -Seconds 5
                 `$waited += 5
 
-                # Check if certificate file exists on DC
-                # Recreate session check to ensure it's still valid
-                try {
-                    `$certExists = Invoke-Command -Session `$session -ScriptBlock {
-                        Test-Path "C:\temp-ca-cert.crt"
-                    } -ErrorAction Stop
-                } catch {
-                    Write-Log "Session error during polling, reconnecting..."
-                    Remove-PSSession -Session `$session -ErrorAction SilentlyContinue
-                    `$session = New-PSSession -ComputerName "$dcFQDN" -Credential `$domainCred
-                    `$certExists = Invoke-Command -Session `$session -ScriptBlock {
-                        Test-Path "C:\temp-ca-cert.crt"
+                # Log any job output that's become available
+                `$jobOutput = Receive-Job -Job `$submitJob -Keep -ErrorAction Continue
+                if (`$jobOutput) {
+                    foreach (`$line in `$jobOutput) {
+                        Write-Log "  [Job Output] `$line"
                     }
+                }
+
+                # Check if certificate file exists on DC using the main session
+                `$certExists = Invoke-Command -Session `$session -ScriptBlock {
+                    Test-Path "C:\temp-ca-cert.crt"
                 }
 
                 if (`$certExists) {
