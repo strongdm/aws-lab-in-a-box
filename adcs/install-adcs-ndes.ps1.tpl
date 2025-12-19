@@ -337,27 +337,56 @@ try {
                     Remove-Item -Path "C:\temp-ca-cert.crt" -Force -ErrorAction SilentlyContinue
                 }
 
-                # Close the session
-                Remove-PSSession -Session `$session
-
-                # Install the certificate locally
+                # Install the certificate locally using domain admin credentials
+                # This requires AD rights to publish the CA certificate
                 if (Test-Path `$certFile) {
-                    Write-Log "Installing subordinate CA certificate..."
-                    `$installOutput = certutil -installcert "`$certFile" 2>&1
-                    Write-Log "certutil output: `$installOutput"
-                    Write-Log "Subordinate CA certificate installed successfully"
+                    Write-Log "Installing subordinate CA certificate with domain admin credentials..."
 
-                    # Start CA service
-                    Start-Service -Name CertSvc -ErrorAction Stop
-                    Write-Log "Certificate Authority service started"
+                    # Create a scheduled task that runs as domain admin to install the certificate
+                    # This is necessary because certutil -installcert requires AD publication rights
+                    `$taskName = "InstallSubCACert"
+                    `$taskAction = New-ScheduledTaskAction -Execute "certutil.exe" -Argument "-installcert `"`$certFile`""
+                    `$taskPrincipal = New-ScheduledTaskPrincipal -UserId "$domainFQDN\$domainAdmin" -LogonType Password -RunLevel Highest
 
-                    # Verify CA is operational
-                    Start-Sleep -Seconds 5
-                    `$pingOutput = certutil -ping 2>&1
-                    Write-Log "CA ping result: `$pingOutput"
+                    Write-Log "Creating scheduled task to install certificate as domain admin..."
+                    Register-ScheduledTask -TaskName `$taskName -Action `$taskAction -Principal `$taskPrincipal -Force | Out-Null
+
+                    Write-Log "Running certificate installation task..."
+                    `$taskPassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
+                    `$task = Get-ScheduledTask -TaskName `$taskName
+                    `$task.Principal.UserId = "$domainFQDN\$domainAdmin"
+                    `$task | Set-ScheduledTask -User "$domainFQDN\$domainAdmin" -Password "$domainPassword" | Out-Null
+
+                    Start-ScheduledTask -TaskName `$taskName
+                    Start-Sleep -Seconds 10
+
+                    # Check task result
+                    `$taskInfo = Get-ScheduledTaskInfo -TaskName `$taskName
+                    Write-Log "Task last run result: `$(`$taskInfo.LastTaskResult)"
+
+                    # Clean up task
+                    Unregister-ScheduledTask -TaskName `$taskName -Confirm:`$false
+
+                    if (`$taskInfo.LastTaskResult -eq 0) {
+                        Write-Log "Subordinate CA certificate installed successfully"
+
+                        # Start CA service
+                        Start-Service -Name CertSvc -ErrorAction Stop
+                        Write-Log "Certificate Authority service started"
+
+                        # Verify CA is operational
+                        Start-Sleep -Seconds 5
+                        `$pingOutput = certutil -ping 2>&1
+                        Write-Log "CA ping result: `$pingOutput"
+                    } else {
+                        Write-Log "ERROR: Certificate installation failed with code: `$(`$taskInfo.LastTaskResult)"
+                    }
                 } else {
                     Write-Log "ERROR: Certificate file not found after copy from DC"
                 }
+
+                # Close the session
+                Remove-PSSession -Session `$session
             } else {
                 Write-Log "ERROR: Failed to sign certificate on DC"
                 Remove-PSSession -Session `$session -ErrorAction SilentlyContinue
