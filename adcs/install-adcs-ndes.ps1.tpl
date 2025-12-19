@@ -208,7 +208,7 @@ try {
     }
 
     if (`$requestFile) {
-        `$rootCAName = "$dcFQDN\\$domainName-CA"
+        `$rootCAName = "$dcFQDN\$domainName-CA"
         Write-Log "Found certificate request file: `$requestFile"
 
         # Use PowerShell Remoting (WinRM) to sign certificate on DC
