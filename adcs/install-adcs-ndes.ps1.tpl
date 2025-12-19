@@ -243,9 +243,9 @@ try {
             # Note: certreq -submit may hang but still creates the certificate in the background
             Write-Log "Submitting certificate request on DC (running in background)..."
 
-            # Start the submission job in the background using -AsJob with computer name
-            # This keeps the session alive for polling
-            `$submitJob = Invoke-Command -ComputerName "$dcFQDN" -Credential `$domainCred -ScriptBlock {
+            # Start the submission job in the background using the existing session with -AsJob
+            # This uses the authenticated session context which works reliably
+            `$submitJob = Invoke-Command -Session `$session -ScriptBlock {
                 param(`$reqFilePath, `$caName)
                 certreq.exe -config "`$caName" -submit "`$reqFilePath" "C:\temp-ca-cert.crt" 2>&1
             } -ArgumentList "C:\temp-ca-request.req", `$rootCAName -AsJob
