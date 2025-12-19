@@ -229,55 +229,52 @@ try {
             Copy-Item -Path "`$requestFile" -Destination "C:\temp-ca-request.req" -ToSession `$session
             Write-Log "Request file copied to DC"
 
-            # Submit and approve the certificate request on DC
-            Write-Log "Submitting and approving certificate on DC..."
-            `$signResult = Invoke-Command -Session `$session -ScriptBlock {
+            # Submit certificate request on DC
+            # Note: certreq -submit hangs but still creates the certificate in the background
+            Write-Log "Submitting certificate request on DC (running in background)..."
+
+            # Start the submission job in the background
+            `$submitJob = Invoke-Command -Session `$session -ScriptBlock {
                 param(`$reqFilePath, `$caName)
+                certreq.exe -config "`$caName" -submit "`$reqFilePath" "C:\temp-ca-cert.crt" 2>&1
+            } -ArgumentList "C:\temp-ca-request.req", `$rootCAName -AsJob
 
-                `$result = @{
-                    Success = `$false
-                    RequestId = `$null
-                    Output = ""
+            Write-Log "Submission job started (Job ID: `$(`$submitJob.Id))"
+            Write-Log "Polling for certificate file (checking every 5 seconds, max 60 seconds)..."
+
+            # Poll for the certificate file instead of waiting for command output
+            `$maxWait = 60
+            `$waited = 0
+            `$certCreated = `$false
+
+            while (`$waited -lt `$maxWait -and -not `$certCreated) {
+                Start-Sleep -Seconds 5
+                `$waited += 5
+
+                # Check if certificate file exists on DC
+                `$certExists = Invoke-Command -Session `$session -ScriptBlock {
+                    Test-Path "C:\temp-ca-cert.crt"
                 }
 
-                try {
-                    # Import the certificate request into the CA database
-                    # This submits it directly to the CA service running locally
-                    `$submitCmd = "certreq.exe -config ```"`$caName```" -submit ```"`$reqFilePath```""
-                    `$submitOutput = cmd /c `$submitCmd 2>&1
-
-                    `$result.Output = `$submitOutput -join "`n"
-
-                    # Parse request ID from output
-                    if (`$result.Output -match "RequestId:\s*(\d+)") {
-                        `$reqId = `$Matches[1]
-                        `$result.RequestId = `$reqId
-
-                        # Wait a moment for auto-approval to process
-                        Start-Sleep -Seconds 2
-
-                        # Retrieve the issued certificate
-                        `$retrieveOutput = certreq.exe -retrieve -config "`$caName" `$reqId "C:\temp-ca-cert.crt" 2>&1
-
-                        if (Test-Path "C:\temp-ca-cert.crt") {
-                            `$result.Success = `$true
-                            `$result.Output += "`nCertificate retrieved successfully"
-                        } else {
-                            `$result.Output += "`nERROR: Certificate file not created after retrieval"
-                            `$result.Output += "`nRetrieve output: " + (`$retrieveOutput -join "`n")
-                        }
-                    } else {
-                        `$result.Output += "`nERROR: Could not parse RequestId from certreq output"
-                    }
-                } catch {
-                    `$result.Output += "`nEXCEPTION: `$(`$_.Exception.Message)"
+                if (`$certExists) {
+                    `$certCreated = `$true
+                    Write-Log "SUCCESS: Certificate file detected on DC after `$waited seconds"
+                } else {
+                    Write-Log "Waiting for certificate... (`$waited seconds elapsed)"
                 }
+            }
 
-                return `$result
-            } -ArgumentList "C:\temp-ca-request.req", `$rootCAName -AsJob | Wait-Job -Timeout 30 | Receive-Job
+            # Stop the job (it may still be hanging but cert is created)
+            Stop-Job -Job `$submitJob -ErrorAction SilentlyContinue
+            Remove-Job -Job `$submitJob -Force -ErrorAction SilentlyContinue
 
-            Write-Log "Sign result: Success=`$(`$signResult.Success), RequestID=`$(`$signResult.RequestId)"
-            Write-Log "Output: `$(`$signResult.Output)"
+            `$signResult = @{
+                Success = `$certCreated
+                Output = if (`$certCreated) { "Certificate created successfully" } else { "Certificate not created within timeout" }
+            }
+
+            Write-Log "Certificate signing result: Success=`$(`$signResult.Success)"
+            Write-Log "`$(`$signResult.Output)"
 
             if (`$signResult.Success) {
                 # Copy the signed certificate back from DC
