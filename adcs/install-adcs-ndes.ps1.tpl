@@ -337,25 +337,17 @@ try {
                     Remove-Item -Path "C:\temp-ca-cert.crt" -Force -ErrorAction SilentlyContinue
                 }
 
-                # Install the certificate locally using domain admin credentials via PSExec-like approach
+                # Install the certificate locally using domain admin credentials via PowerShell remoting
                 # This requires AD rights to publish the CA certificate
                 if (Test-Path `$certFile) {
                     Write-Log "Installing subordinate CA certificate with domain admin credentials..."
-
-                    # Use runas.exe with embedded credentials via a script
-                    # Create a temporary script that will be run as domain admin
-                    `$installScript = @"
-certutil.exe -installcert "`$certFile" 2>&1 | Out-File -FilePath C:\cert-install-output.txt -Encoding ASCII
-exit `$LASTEXITCODE
-"@
-                    `$installScriptPath = "C:\install-ca-cert.ps1"
-                    Set-Content -Path `$installScriptPath -Value `$installScript -Force
-
                     Write-Log "Running certificate installation as domain admin via PowerShell remoting to localhost..."
                     try {
                         # Use Invoke-Command to localhost with domain admin credentials
-                        `$certInstallScript = "certutil.exe -installcert ```"`$certFile```" 2>&1"
-                        `$installResult = Invoke-Command -ComputerName localhost -Credential `$domainCred -ScriptBlock ([scriptblock]::Create(`$certInstallScript))
+                        `$installResult = Invoke-Command -ComputerName localhost -Credential `$domainCred -ScriptBlock {
+                            param(`$certPath)
+                            certutil.exe -installcert `$certPath 2>&1
+                        } -ArgumentList `$certFile
 
                         Write-Log "Certificate installation output: `$installResult"
                         Write-Log "Subordinate CA certificate installed successfully"
@@ -364,10 +356,24 @@ exit `$LASTEXITCODE
                         Start-Service -Name CertSvc -ErrorAction Stop
                         Write-Log "Certificate Authority service started"
 
-                        # Verify CA is operational
+                        # Verify CA service is running
                         Start-Sleep -Seconds 5
+                        `$caService = Get-Service -Name CertSvc
+                        if (`$caService.Status -eq "Running") {
+                            Write-Log "CA service verified running"
+                        } else {
+                            Write-Log "WARNING: CA service status is `$(`$caService.Status)"
+                        }
+
+                        # Verify CA is operational with certutil ping
                         `$pingOutput = certutil -ping 2>&1
                         Write-Log "CA ping result: `$pingOutput"
+
+                        if (`$pingOutput -like "*interface is alive*" -or `$pingOutput -like "*Server*OK*") {
+                            Write-Log "CA operational check: PASSED"
+                        } else {
+                            Write-Log "WARNING: CA operational check may have failed - review ping output above"
+                        }
 
                     } catch {
                         Write-Log "ERROR installing certificate: `$_"
@@ -392,10 +398,25 @@ exit `$LASTEXITCODE
                         # Try to start CA service
                         Start-Service -Name CertSvc -ErrorAction Stop
                         Write-Log "Certificate Authority service started"
-                    }
 
-                    # Clean up temp script
-                    Remove-Item -Path `$installScriptPath -Force -ErrorAction SilentlyContinue
+                        # Verify CA service is running
+                        Start-Sleep -Seconds 5
+                        `$caService = Get-Service -Name CertSvc
+                        if (`$caService.Status -eq "Running") {
+                            Write-Log "CA service verified running"
+                        } else {
+                            Write-Log "WARNING: CA service status is `$(`$caService.Status)"
+                        }
+
+                        # Verify CA is operational
+                        `$pingOutput = certutil -ping 2>&1
+                        Write-Log "CA ping result: `$pingOutput"
+                        if (`$pingOutput -like "*interface is alive*" -or `$pingOutput -like "*Server*OK*") {
+                            Write-Log "CA operational check: PASSED"
+                        } else {
+                            Write-Log "WARNING: CA operational check may have failed"
+                        }
+                    }
 
                 } else {
                     Write-Log "ERROR: Certificate file not found after copy from DC"
@@ -620,30 +641,95 @@ try {
 
     # Get the machine certificate from the local computer's personal store
     # The certificate will be auto-enrolled from the domain CA
-    Start-Sleep -Seconds 10  # Wait for certificate auto-enrollment
+    Write-Log "Waiting for machine certificate auto-enrollment..."
 
-    `$machineCert = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object {
-        `$_.Subject -like "*$computerName*" -and `$_.EnhancedKeyUsageList.FriendlyName -contains "Server Authentication"
-    } | Select-Object -First 1
+    # Try to find machine cert, with retries
+    `$maxRetries = 3
+    `$retryCount = 0
+    `$machineCert = `$null
+
+    while (`$retryCount -lt `$maxRetries -and -not `$machineCert) {
+        Start-Sleep -Seconds 10
+
+        `$machineCert = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue | Where-Object {
+            (`$_.Subject -like "*$computerName*" -or `$_.Subject -like "*`$env:COMPUTERNAME*") -and
+            `$_.EnhancedKeyUsageList.FriendlyName -contains "Server Authentication"
+        } | Select-Object -First 1
+
+        `$retryCount++
+
+        if (-not `$machineCert) {
+            Write-Log "Machine certificate not found (attempt `$retryCount/`$maxRetries)"
+
+            # Trigger group policy update to force certificate enrollment
+            if (`$retryCount -eq 1) {
+                Write-Log "Triggering Group Policy update to force certificate enrollment..."
+                gpupdate /force /target:computer | Out-String | ForEach-Object { Write-Log "  `$_" }
+            }
+
+            # List available certificates for debugging
+            `$allCerts = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue
+            if (`$allCerts) {
+                Write-Log "Available certificates in LocalMachine\My:"
+                foreach (`$cert in `$allCerts) {
+                    Write-Log "  Subject: `$(`$cert.Subject), Issuer: `$(`$cert.Issuer)"
+                    if (`$cert.EnhancedKeyUsageList) {
+                        Write-Log "    EKU: `$(`$cert.EnhancedKeyUsageList.FriendlyName -join ', ')"
+                    }
+                }
+            } else {
+                Write-Log "No certificates found in LocalMachine\My store"
+            }
+        }
+    }
 
     if (`$machineCert) {
         Write-Log "Machine certificate found: `$(`$machineCert.Subject)"
+        Write-Log "Certificate thumbprint: `$(`$machineCert.Thumbprint)"
 
-        # Add HTTPS binding to Default Web Site
-        New-WebBinding -Name "Default Web Site" ``
-            -Protocol https ``
-            -Port 443 ``
-            -SslFlags 0 ``
-            -ErrorAction SilentlyContinue
+        # Add HTTPS binding to Default Web Site if it doesn't exist
+        `$existingBinding = Get-WebBinding -Name "Default Web Site" -Protocol https -Port 443 -ErrorAction SilentlyContinue
+        if (-not `$existingBinding) {
+            New-WebBinding -Name "Default Web Site" ``
+                -Protocol https ``
+                -Port 443 ``
+                -SslFlags 0 ``
+                -ErrorAction Stop
+            Write-Log "HTTPS binding created on port 443"
+        } else {
+            Write-Log "HTTPS binding already exists"
+        }
 
-        # Bind the certificate to the HTTPS binding
-        `$binding = Get-WebBinding -Name "Default Web Site" -Protocol https
-        `$binding.AddSslCertificate(`$machineCert.Thumbprint, "my")
+        # Bind the certificate using the modern approach
+        try {
+            # Remove any existing SSL binding for 0.0.0.0:443
+            if (Test-Path "IIS:\SslBindings\0.0.0.0!443") {
+                Remove-Item -Path "IIS:\SslBindings\0.0.0.0!443" -Force
+                Write-Log "Removed existing SSL binding"
+            }
 
-        Write-Log "HTTPS binding configured with machine certificate"
+            # Create new SSL binding with certificate
+            Get-Item -Path "Cert:\LocalMachine\My\`$(`$machineCert.Thumbprint)" | ``
+                New-Item -Path "IIS:\SslBindings\0.0.0.0!443" -Force | Out-Null
+
+            Write-Log "HTTPS binding configured with machine certificate"
+        } catch {
+            Write-Log "WARNING: Modern SSL binding method failed: `$_"
+            Write-Log "Attempting fallback method..."
+
+            # Fallback to deprecated method if modern approach fails
+            try {
+                `$binding = Get-WebBinding -Name "Default Web Site" -Protocol https -Port 443
+                `$binding.AddSslCertificate(`$machineCert.Thumbprint, "my")
+                Write-Log "HTTPS binding configured using fallback method"
+            } catch {
+                Write-Log "ERROR: Both SSL binding methods failed: `$_"
+            }
+        }
     } else {
         Write-Log "WARNING: Machine certificate not found for HTTPS binding"
         Write-Log "HTTPS will not be available - certificate may enroll after group policy refresh"
+        Write-Log "Run 'gpupdate /force' and check Cert:\LocalMachine\My for machine certificates"
     }
 
     # Restart IIS
@@ -660,17 +746,92 @@ try {
 Write-Log "Step 11: Configuring certificate template permissions..."
 
 try {
-    # Grant NDES service account permissions on the template
+    # Grant permissions on the template for Domain Computers and Authenticated Users
     `$configNC = (Get-ADRootDSE).configurationNamingContext
     `$templateDN = "CN=$templateName,CN=Certificate Templates,CN=Public Key Services,CN=Services,`$configNC"
 
-    # Add Read and Enroll permissions for Domain Computers
-    # (Using certutil as it's simpler than ACL manipulation)
-    certutil -dstemplate $templateName
+    Write-Log "Template DN: `$templateDN"
 
-    Write-Log "Certificate template permissions configured"
+    # Get the template object
+    `$template = Get-ADObject -Identity `$templateDN -Properties nTSecurityDescriptor -ErrorAction Stop
+
+    # Get current ACL
+    `$acl = `$template.nTSecurityDescriptor
+
+    # Add Read and Enroll permissions for Domain Computers
+    `$domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-21-*-515")  # Well-known SID pattern
+    # Get actual Domain Computers group SID
+    `$domainComputersGroup = Get-ADGroup -Identity "Domain Computers" -ErrorAction Stop
+    `$domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier(`$domainComputersGroup.SID)
+
+    # Create access rule: Read (GenericRead) + Enroll (ExtendedRight with specific GUID)
+    `$enrollGuid = New-Object Guid "0e10c968-78fb-11d2-90d4-00c04f79dc55"  # Certificate-Enrollment extended right
+    `$autoEnrollGuid = New-Object Guid "a05b8cc2-17bc-4802-a710-e7c15ab866a2"  # Certificate-AutoEnrollment extended right
+
+    `$readRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        `$domainComputersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    `$enrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        `$domainComputersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        `$enrollGuid,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    `$autoEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        `$domainComputersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        `$autoEnrollGuid,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    # Add rules to ACL
+    `$acl.AddAccessRule(`$readRule)
+    `$acl.AddAccessRule(`$enrollRule)
+    `$acl.AddAccessRule(`$autoEnrollRule)
+
+    Write-Log "Added Read, Enroll, and AutoEnroll permissions for Domain Computers"
+
+    # Also add permissions for Authenticated Users (for NDES service account)
+    `$authUsersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-11")  # Authenticated Users
+
+    `$authReadRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        `$authUsersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    `$authEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        `$authUsersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        `$enrollGuid,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    `$acl.AddAccessRule(`$authReadRule)
+    `$acl.AddAccessRule(`$authEnrollRule)
+
+    Write-Log "Added Read and Enroll permissions for Authenticated Users"
+
+    # Apply the modified ACL
+    Set-ADObject -Identity `$templateDN -Replace @{nTSecurityDescriptor=`$acl} -ErrorAction Stop
+
+    Write-Log "Certificate template permissions configured successfully"
+
+    # Display template info for verification
+    certutil -dstemplate $templateName | Out-String | ForEach-Object { Write-Log "  `$_" }
+
 } catch {
     Write-Log "ERROR configuring template permissions: `$_"
+    Write-Log "Template may still work but enrollment permissions might be restricted"
 }
 
 Write-Log "=========================================="
