@@ -354,10 +354,8 @@ exit `$LASTEXITCODE
                     Write-Log "Running certificate installation as domain admin via PowerShell remoting to localhost..."
                     try {
                         # Use Invoke-Command to localhost with domain admin credentials
-                        `$installResult = Invoke-Command -ComputerName localhost -Credential `$domainCred -ScriptBlock {
-                            param($certPath)
-                            certutil.exe -installcert "$certPath" 2>&1
-                        } -ArgumentList `$certFile
+                        `$certInstallScript = "certutil.exe -installcert ```"`$certFile```" 2>&1"
+                        `$installResult = Invoke-Command -ComputerName localhost -Credential `$domainCred -ScriptBlock ([scriptblock]::Create(`$certInstallScript))
 
                         Write-Log "Certificate installation output: `$installResult"
                         Write-Log "Subordinate CA certificate installed successfully"
