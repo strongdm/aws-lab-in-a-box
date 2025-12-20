@@ -116,8 +116,8 @@ locals {
     Name    = "sdm-${var.name}-adcs-ndes"
   })
 
-  # Render the full PowerShell installation script
-  install_adcs_rendered = templatefile("${path.module}/install-adcs-ndes.ps1.tpl", {
+  # Template variables shared by both parts
+  template_vars = {
     computer_name             = local.computer_name
     domain_name               = var.domain_name
     domain_fqdn               = local.domain_fqdn
@@ -128,20 +128,27 @@ locals {
     ca_common_name            = local.ca_common_name
     certificate_template_name = var.certificate_template_name
     ndes_service_account      = var.ndes_service_account
-  })
+    s3_bucket                 = aws_s3_bucket.adcs_scripts.id
+  }
+
+  # Render Part 1: Domain join script
+  install_adcs_part1_rendered = templatefile("${path.module}/install-adcs-part1.ps1.tpl", local.template_vars)
+
+  # Render Part 2: ADCS configuration script
+  install_adcs_part2_rendered = templatefile("${path.module}/install-adcs-part2.ps1.tpl", local.template_vars)
 
   # Minimal bootstrap script that downloads and executes the full script from S3
   # This keeps user_data small to avoid the 16KB limit
   bootstrap_script = <<-EOT
     <persist>true</persist>
     <powershell>
-    # Bootstrap script to download and execute the full ADCS installation script from S3
-    # Script Hash: ${md5(local.install_adcs_rendered)}
-    # This hash ensures user_data changes when configuration changes
+    # Bootstrap script to download and execute the ADCS installation Part 1 script from S3
+    # Script Hashes: Part1=${md5(local.install_adcs_part1_rendered)} Part2=${md5(local.install_adcs_part2_rendered)}
+    # These hashes ensure user_data changes when configuration changes
 
     $bucketName = "${aws_s3_bucket.adcs_scripts.id}"
-    $scriptKey = "install-adcs.ps1"
-    $scriptPath = "C:\install-adcs.ps1"
+    $scriptKey = "install-adcs-part1.ps1"
+    $scriptPath = "C:\install-adcs-part1.ps1"
     $logPath = "C:\bootstrap.log"
 
     Start-Transcript -Path $logPath -Append

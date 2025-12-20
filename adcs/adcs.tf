@@ -69,15 +69,26 @@ resource "aws_s3_bucket_public_access_block" "adcs_scripts" {
   restrict_public_buckets = true
 }
 
-# Upload the full PowerShell installation script to S3
-# This avoids user_data size limits
-resource "aws_s3_object" "install_script" {
+# Upload Part 1 script (domain join) to S3
+resource "aws_s3_object" "install_script_part1" {
   bucket  = aws_s3_bucket.adcs_scripts.id
-  key     = "install-adcs.ps1"
-  content = local.install_adcs_rendered
+  key     = "install-adcs-part1.ps1"
+  content = local.install_adcs_part1_rendered
 
   # ETag ensures object is updated when content changes
-  etag = md5(local.install_adcs_rendered)
+  etag = md5(local.install_adcs_part1_rendered)
+
+  tags = local.thistagset
+}
+
+# Upload Part 2 script (ADCS configuration) to S3
+resource "aws_s3_object" "install_script_part2" {
+  bucket  = aws_s3_bucket.adcs_scripts.id
+  key     = "install-adcs-part2.ps1"
+  content = local.install_adcs_part2_rendered
+
+  # ETag ensures object is updated when content changes
+  etag = md5(local.install_adcs_part2_rendered)
 
   tags = local.thistagset
 }
