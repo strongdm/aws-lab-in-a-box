@@ -375,128 +375,9 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 6.5: Install Active Directory PowerShell Module
+# Step 7: Configure NDES
 #--------------------------------------------------------------
-Write-Log "Step 6.5: Installing Active Directory PowerShell module..."
-
-try {
-    $adModule = Get-WindowsFeature -Name RSAT-AD-PowerShell
-
-    if ($adModule.InstallState -ne "Installed") {
-        Write-Log "Installing RSAT-AD-PowerShell feature..."
-        Install-WindowsFeature -Name RSAT-AD-PowerShell -IncludeAllSubFeature -ErrorAction Stop
-        Write-Log "AD PowerShell module installed successfully"
-    } else {
-        Write-Log "AD PowerShell module already installed"
-    }
-
-    # Import the module
-    Import-Module ActiveDirectory -ErrorAction Stop
-    Write-Log "Active Directory module imported successfully"
-
-    # Test connection to DC and ADWS
-    Write-Log "Testing connection to Domain Controller: $dcFQDN"
-    $dcTest = Test-Connection -ComputerName $dcFQDN -Count 2 -Quiet
-    if (-not $dcTest) {
-        Write-Log "WARNING: Cannot ping Domain Controller at $dcFQDN"
-    }
-
-    # Verify ADWS is accessible
-    Write-Log "Verifying Active Directory Web Services on DC..."
-    $adRootDSE = Get-ADRootDSE -Server $dcFQDN -ErrorAction Stop
-    Write-Log "Successfully connected to AD Web Services on $dcFQDN"
-} catch {
-    Write-Log "ERROR installing/importing AD module or connecting to DC: $_"
-    Write-Log "Ensure Active Directory Web Services is running on $dcFQDN"
-    exit 1
-}
-
-#--------------------------------------------------------------
-# Step 7: Create StrongDM Certificate Template
-#--------------------------------------------------------------
-Write-Log "Step 7: Creating StrongDM certificate template..."
-
-try {
-    # Connect to AD Certificate Services
-    $configNC = (Get-ADRootDSE -Server $dcFQDN).configurationNamingContext
-    $templateContainer = "CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
-
-    Write-Log "Certificate template container: $templateContainer"
-
-    # Get Smart Card Logon template as source
-    $sourceTemplate = Get-ADObject -Server $dcFQDN `
-        -SearchBase $templateContainer `
-        -Filter {cn -eq "SmartcardLogon"} `
-        -Properties * `
-        -ErrorAction Stop
-
-    if ($sourceTemplate) {
-        Write-Log "Source template 'SmartcardLogon' found"
-
-        # Create new template based on Smart Card Logon
-        $newTemplateName = "$templateName"
-        $newTemplateDN = "CN=$newTemplateName,$templateContainer"
-
-        # Check if template already exists
-        $existingTemplate = Get-ADObject -Server $dcFQDN `
-            -SearchBase $templateContainer `
-            -Filter {cn -eq $newTemplateName} `
-            -ErrorAction SilentlyContinue
-
-        if (-not $existingTemplate) {
-            # Copy template properties
-            $templateAttributes = @{
-                objectClass = "pKICertificateTemplate"
-                cn = $newTemplateName
-                displayName = $newTemplateName
-                flags = 131680  # Enable: Publish to AD, Allow private key export
-                "pKIDefaultKeySpec" = 1
-                "pKIKeyUsage" = [byte[]](0xa0, 0x00)  # Digital signature + Key encipherment
-                "pKIMaxIssuingDepth" = 0
-                "pKICriticalExtensions" = "2.5.29.15"  # Key usage
-                "pKIExpirationPeriod" = [byte[]](0x00, 0x40, 0x1e, 0xa4, 0xe8, 0x65, 0xfa, 0xff)  # 1 year
-                "pKIOverlapPeriod" = [byte[]](0x00, 0x80, 0xa6, 0x0a, 0xff, 0xde, 0xff, 0xff)  # 6 weeks
-                "pKIExtendedKeyUsage" = @("1.3.6.1.4.1.311.20.2.2", "1.3.6.1.5.5.7.3.2")  # Smart Card Logon, Client Auth
-                "msPKI-Certificate-Application-Policy" = @("1.3.6.1.4.1.311.20.2.2", "1.3.6.1.5.5.7.3.2")
-                "msPKI-Certificate-Name-Flag" = 1  # ENROLLEE_SUPPLIES_SUBJECT (allow subject in request)
-                "msPKI-Enrollment-Flag" = 32  # Include symmetric algorithms
-                "msPKI-Minimal-Key-Size" = 2048
-                "msPKI-Private-Key-Flag" = 16842768  # Allow key export
-                "msPKI-RA-Signature" = 0
-                "msPKI-Template-Minor-Revision" = 1
-                "msPKI-Template-Schema-Version" = 2
-                "revision" = 100
-            }
-
-            New-ADObject -Server $dcFQDN `
-                -Name $newTemplateName `
-                -Type pKICertificateTemplate `
-                -Path $templateContainer `
-                -OtherAttributes $templateAttributes `
-                -ErrorAction Stop
-
-            Write-Log "Certificate template '$newTemplateName' created successfully"
-            Write-Log "Template allows subject name in request: ENABLED"
-
-            # Add template to CA
-            Start-Sleep -Seconds 5
-            certutil -SetCATemplates +$newTemplateName
-            Write-Log "Template added to CA"
-
-        } else {
-            Write-Log "Certificate template '$newTemplateName' already exists"
-        }
-    } else {
-        Write-Log "ERROR: SmartcardLogon template not found"
-    }
-} catch {
-    Write-Log "ERROR creating certificate template: $_"
-}
-
-#--------------------------------------------------------------
-# Step 8: Configure NDES
-#--------------------------------------------------------------
-Write-Log "Step 8: Configuring NDES..."
+Write-Log "Step 7: Configuring NDES..."
 
 try {
     # NDES configuration requires domain admin privileges
@@ -592,9 +473,9 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 9: Configure NDES Registry Settings
+# Step 8: Configure NDES Registry Settings
 #--------------------------------------------------------------
-Write-Log "Step 9: Configuring NDES registry for StrongDM template..."
+Write-Log "Step 8: Configuring NDES registry for StrongDM template..."
 
 try {
     $mscepPath = "HKLM:\Software\Microsoft\Cryptography\MSCEP"
@@ -622,9 +503,9 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 10: Enable IIS Basic Authentication
+# Step 9: Enable IIS Basic Authentication
 #--------------------------------------------------------------
-Write-Log "Step 10: Enabling IIS Basic Authentication for NDES..."
+Write-Log "Step 9: Enabling IIS Basic Authentication for NDES..."
 
 try {
     Import-Module WebAdministration
@@ -750,100 +631,6 @@ try {
 
 } catch {
     Write-Log "ERROR configuring IIS: $_"
-}
-
-#--------------------------------------------------------------
-# Step 11: Configure Certificate Template Permissions
-#--------------------------------------------------------------
-Write-Log "Step 11: Configuring certificate template permissions..."
-
-try {
-    # Grant permissions on the template for Domain Computers and Authenticated Users
-    $configNC = (Get-ADRootDSE -Server $dcFQDN).configurationNamingContext
-    $templateDN = "CN=$templateName,CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
-
-    Write-Log "Template DN: $templateDN"
-
-    # Get the template object
-    $template = Get-ADObject -Server $dcFQDN -Identity $templateDN -Properties nTSecurityDescriptor -ErrorAction Stop
-
-    # Get current ACL
-    $acl = $template.nTSecurityDescriptor
-
-    # Add Read and Enroll permissions for Domain Computers
-    $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-21-*-515")  # Well-known SID pattern
-    # Get actual Domain Computers group SID
-    $domainComputersGroup = Get-ADGroup -Server $dcFQDN -Identity "Domain Computers" -ErrorAction Stop
-    $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier($domainComputersGroup.SID)
-
-    # Create access rule: Read (GenericRead) + Enroll (ExtendedRight with specific GUID)
-    $enrollGuid = New-Object Guid "0e10c968-78fb-11d2-90d4-00c04f79dc55"  # Certificate-Enrollment extended right
-    $autoEnrollGuid = New-Object Guid "a05b8cc2-17bc-4802-a710-e7c15ab866a2"  # Certificate-AutoEnrollment extended right
-
-    $readRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
-        $domainComputersSID,
-        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
-        [System.Security.AccessControl.AccessControlType]::Allow,
-        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
-    )
-
-    $enrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
-        $domainComputersSID,
-        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
-        [System.Security.AccessControl.AccessControlType]::Allow,
-        $enrollGuid,
-        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
-    )
-
-    $autoEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
-        $domainComputersSID,
-        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
-        [System.Security.AccessControl.AccessControlType]::Allow,
-        $autoEnrollGuid,
-        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
-    )
-
-    # Add rules to ACL
-    $acl.AddAccessRule($readRule)
-    $acl.AddAccessRule($enrollRule)
-    $acl.AddAccessRule($autoEnrollRule)
-
-    Write-Log "Added Read, Enroll, and AutoEnroll permissions for Domain Computers"
-
-    # Also add permissions for Authenticated Users (for NDES service account)
-    $authUsersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-11")  # Authenticated Users
-
-    $authReadRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
-        $authUsersSID,
-        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
-        [System.Security.AccessControl.AccessControlType]::Allow,
-        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
-    )
-
-    $authEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
-        $authUsersSID,
-        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
-        [System.Security.AccessControl.AccessControlType]::Allow,
-        $enrollGuid,
-        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
-    )
-
-    $acl.AddAccessRule($authReadRule)
-    $acl.AddAccessRule($authEnrollRule)
-
-    Write-Log "Added Read and Enroll permissions for Authenticated Users"
-
-    # Apply the modified ACL
-    Set-ADObject -Server $dcFQDN -Identity $templateDN -Replace @{nTSecurityDescriptor=$acl} -ErrorAction Stop
-
-    Write-Log "Certificate template permissions configured successfully"
-
-    # Display template info for verification
-    certutil -dstemplate $templateName | Out-String | ForEach-Object { Write-Log "  $_" }
-
-} catch {
-    Write-Log "ERROR configuring template permissions: $_"
-    Write-Log "Template may still work but enrollment permissions might be restricted"
 }
 
 Write-Log "=========================================="

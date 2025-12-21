@@ -594,6 +594,175 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
             # Don't fail the entire setup if Parameter Store fails - it's not critical
         }
 
+        #--------------------------------------------------------------
+        # Create StrongDM Certificate Template
+        #--------------------------------------------------------------
+        "[DCInstall] Creating StrongDM certificate template..."
+
+        try {
+            # Import AD module
+            Import-Module ActiveDirectory -ErrorAction Stop
+
+            # Get configuration naming context
+            $configNC = (Get-ADRootDSE).configurationNamingContext
+            $templateContainer = "CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
+
+            "[DCInstall] Certificate template container: $templateContainer"
+
+            # Get Smart Card Logon template as source
+            $sourceTemplate = Get-ADObject -SearchBase $templateContainer `
+                -Filter {cn -eq "SmartcardLogon"} `
+                -Properties * `
+                -ErrorAction Stop
+
+            if ($sourceTemplate) {
+                "[DCInstall] Source template 'SmartcardLogon' found"
+
+                # Define the new template name
+                $newTemplateName = "StrongDM"
+                $newTemplateDN = "CN=$newTemplateName,$templateContainer"
+
+                # Check if template already exists
+                $existingTemplate = Get-ADObject -SearchBase $templateContainer `
+                    -Filter {cn -eq $newTemplateName} `
+                    -ErrorAction SilentlyContinue
+
+                if (-not $existingTemplate) {
+                    # Copy template properties
+                    $templateAttributes = @{
+                        objectClass = "pKICertificateTemplate"
+                        cn = $newTemplateName
+                        name = $newTemplateName
+                        displayName = $newTemplateName
+                        flags = 66256
+                        "pKIDefaultKeySpec" = 1
+                        "pKIKeyUsage" = [byte[]](0xa0, 0x00)
+                        "pKIMaxIssuingDepth" = 0
+                        "pKICriticalExtensions" = "2.5.29.15"
+                        "pKIExpirationPeriod" = [byte[]](0x00, 0x40, 0x39, 0x87, 0x2e, 0xe1, 0xfe, 0xff)
+                        "pKIOverlapPeriod" = [byte[]](0x00, 0x3A, 0xA4, 0x6B, 0xF7, 0xFF, 0xFF, 0xFF)
+                        "pKIExtendedKeyUsage" = @("1.3.6.1.4.1.311.20.2.2", "1.3.6.1.5.5.7.3.2")
+                        "msPKI-Certificate-Application-Policy" = @("1.3.6.1.4.1.311.20.2.2", "1.3.6.1.5.5.7.3.2")
+                        "msPKI-Certificate-Name-Flag" = 1
+                        "msPKI-Enrollment-Flag" = 41
+                        "msPKI-Minimal-Key-Size" = 2048
+                        "msPKI-Private-Key-Flag" = 16842768
+                        "msPKI-RA-Signature" = 0
+                        "msPKI-Template-Minor-Revision" = 1
+                        "msPKI-Template-Schema-Version" = 2
+                        "revision" = 100
+                    }
+
+                    New-ADObject -Name $newTemplateName `
+                        -Type pKICertificateTemplate `
+                        -Path $templateContainer `
+                        -OtherAttributes $templateAttributes `
+                        -ErrorAction Stop
+
+                    "[DCInstall] Certificate template '$newTemplateName' created successfully"
+                    "[DCInstall] Template validity: 1 day, renewal: 1 hour"
+
+                    # Grant permissions on the template
+                    Start-Sleep -Seconds 2
+                    $templateDN = "CN=$newTemplateName,$templateContainer"
+
+                    $template = Get-ADObject -Identity $templateDN -Properties nTSecurityDescriptor -ErrorAction Stop
+                    $acl = $template.nTSecurityDescriptor
+
+                    $domainComputersGroup = Get-ADGroup -Identity "Domain Computers" -ErrorAction Stop
+                    $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier($domainComputersGroup.SID)
+
+                    $enrollGuid = New-Object Guid "0e10c968-78fb-11d2-90d4-00c04f79dc55"
+                    $autoEnrollGuid = New-Object Guid "a05b8cc2-17bc-4802-a710-e7c15ab866a2"
+
+                    $readRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $domainComputersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    $enrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $domainComputersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        $enrollGuid,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    $autoEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $domainComputersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        $autoEnrollGuid,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    $acl.AddAccessRule($readRule)
+                    $acl.AddAccessRule($enrollRule)
+                    $acl.AddAccessRule($autoEnrollRule)
+
+                    $authUsersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-11")
+
+                    $authReadRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $authUsersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    $authEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $authUsersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        $enrollGuid,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    $acl.AddAccessRule($authReadRule)
+                    $acl.AddAccessRule($authEnrollRule)
+
+                    Set-ADObject -Identity $templateDN -Replace @{nTSecurityDescriptor=$acl} -ErrorAction Stop
+
+                    "[DCInstall] Certificate template permissions configured"
+                    "[DCInstall] Added Read, Enroll, and AutoEnroll for Domain Computers"
+                    "[DCInstall] Added Read and Enroll for Authenticated Users"
+
+                    # Publish template to CA
+                    "[DCInstall] Publishing template to Certificate Authority..."
+
+                    $caName = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration" -Name "Active").Active
+
+                    if ($caName) {
+                        "[DCInstall] CA Name: $caName"
+
+                        $result = certutil -SetCATemplates +$newTemplateName 2>&1
+                        "[DCInstall] certutil output: $result"
+
+                        if ($LASTEXITCODE -eq 0) {
+                            "[DCInstall] Template '$newTemplateName' published to CA successfully"
+
+                            "[DCInstall] Restarting Certificate Services..."
+                            Restart-Service -Name CertSvc -Force
+                            Start-Sleep -Seconds 5
+                            "[DCInstall] Certificate Services restarted"
+                        } else {
+                            "[DCInstall] WARNING: Failed to publish template to CA (exit code: $LASTEXITCODE)"
+                        }
+                    } else {
+                        "[DCInstall] WARNING: Could not determine CA name"
+                    }
+
+                } else {
+                    "[DCInstall] Certificate template '$newTemplateName' already exists"
+                }
+            } else {
+                "[DCInstall] WARNING: SmartcardLogon template not found"
+            }
+        } catch {
+            "[DCInstall] ERROR creating certificate template: $_"
+        }
+
         "Certificates and GPOs updated" | Out-File "C:\sdm.done"
         "[DCInstall] Domain Controller setup completed successfully! $(Get-Date)"
     } else {
