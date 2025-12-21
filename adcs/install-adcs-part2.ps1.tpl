@@ -248,20 +248,55 @@ try {
                     Remove-Item -Path "C:\temp-ca-cert.crt" -Force -ErrorAction SilentlyContinue
                 }
 
-                # Install the certificate locally using domain admin credentials via PowerShell remoting
-                # This requires AD rights to publish the CA certificate
+                # Install the certificate locally using domain admin credentials
+                # This requires AD rights to publish the CA certificate to Active Directory
                 if (Test-Path $certFile) {
                     Write-Log "Installing subordinate CA certificate with domain admin credentials..."
-                    Write-Log "Running certificate installation as domain admin via PowerShell remoting to localhost..."
-                    try {
-                        # Use Invoke-Command to localhost with domain admin credentials
-                        $installResult = Invoke-Command -ComputerName localhost -Credential $domainCred -ScriptBlock {
-                            param($certPath)
-                            certutil.exe -installcert $certPath 2>&1
-                        } -ArgumentList $certFile
+                    Write-Log "Note: certutil -installcert requires domain admin to publish to AD"
 
-                        Write-Log "Certificate installation output: $installResult"
-                        Write-Log "Subordinate CA certificate installed successfully"
+                    # Use scheduled task to run certutil with domain admin credentials
+                    # This is more reliable than PSRemoting to localhost
+                    $taskName = "InstallCACert"
+                    $taskAction = "certutil.exe -installcert `"$certFile`""
+
+                    try {
+                        Write-Log "Creating scheduled task with domain admin credentials..."
+
+                        # Create scheduled task
+                        schtasks.exe /create `
+                            /tn $taskName `
+                            /tr $taskAction `
+                            /sc once `
+                            /st 00:00 `
+                            /ru "$domainFQDN\$domainAdmin" `
+                            /rp "$domainPassword" `
+                            /rl HIGHEST `
+                            /f 2>&1 | ForEach-Object { Write-Log "  $_" }
+
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "Failed to create scheduled task (exit code: $LASTEXITCODE)"
+                        }
+
+                        Write-Log "Running scheduled task..."
+                        schtasks.exe /run /tn $taskName
+
+                        # Wait for task to complete
+                        Start-Sleep -Seconds 15
+
+                        # Check task status
+                        $taskInfo = schtasks.exe /query /tn $taskName /fo csv /v | ConvertFrom-Csv
+                        $lastResult = $taskInfo.'Last Result'
+                        Write-Log "Task completed with result: $lastResult"
+
+                        # Clean up task
+                        Write-Log "Deleting scheduled task..."
+                        schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
+
+                        if ($lastResult -eq '0') {
+                            Write-Log "Subordinate CA certificate installed successfully"
+                        } else {
+                            throw "Certificate installation failed with code: $lastResult"
+                        }
 
                         # Start CA service
                         Start-Service -Name CertSvc -ErrorAction Stop
@@ -287,58 +322,9 @@ try {
                         }
 
                     } catch {
-                        Write-Log "ERROR installing certificate: $_"
-                        Write-Log "Trying alternative method with scheduled task approach..."
-
-                        # Fallback: Use schtasks.exe with properly escaped arguments
-                        # Note: We need to escape quotes for cmd.exe context
-                        Write-Log "Creating scheduled task to install certificate as domain admin..."
-                        $taskName = "InstallCACert"
-                        $taskAction = "certutil.exe -installcert \`"$certFile\`""
-
-                        # Use schtasks with individual parameters to avoid quote escaping issues
-                        schtasks.exe /create `
-                            /tn $taskName `
-                            /tr $taskAction `
-                            /sc once `
-                            /st 00:00 `
-                            /ru "$domainFQDN\$domainAdmin" `
-                            /rp "$domainPassword" `
-                            /rl HIGHEST `
-                            /f 2>&1 | ForEach-Object { Write-Log "  $_" }
-
-                        Write-Log "Running task..."
-                        schtasks /run /tn InstallCACert
-                        Start-Sleep -Seconds 10
-
-                        Write-Log "Checking task result..."
-                        $taskResult = schtasks /query /tn InstallCACert /fo list /v
-                        Write-Log "$taskResult"
-
-                        Write-Log "Deleting task..."
-                        schtasks /delete /tn InstallCACert /f
-
-                        # Try to start CA service
-                        Start-Service -Name CertSvc -ErrorAction Stop
-                        Write-Log "Certificate Authority service started"
-
-                        # Verify CA service is running
-                        Start-Sleep -Seconds 5
-                        $caService = Get-Service -Name CertSvc
-                        if ($caService.Status -eq "Running") {
-                            Write-Log "CA service verified running"
-                        } else {
-                            Write-Log "WARNING: CA service status is $($caService.Status)"
-                        }
-
-                        # Verify CA is operational
-                        $pingOutput = certutil -ping 2>&1
-                        Write-Log "CA ping result: $pingOutput"
-                        if ($pingOutput -like "*interface is alive*" -or $pingOutput -like "*Server*OK*") {
-                            Write-Log "CA operational check: PASSED"
-                        } else {
-                            Write-Log "WARNING: CA operational check may have failed"
-                        }
+                        Write-Log "ERROR installing certificate with scheduled task: $_"
+                        Write-Log "Exception: $($_.Exception.Message)"
+                        throw
                     }
 
                 } else {
