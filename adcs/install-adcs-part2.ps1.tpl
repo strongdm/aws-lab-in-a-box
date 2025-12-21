@@ -598,6 +598,38 @@ try {
                     Write-Log "  Subject: $($cert.Subject), Issuer: $($cert.Issuer)"
                     if ($cert.EnhancedKeyUsageList) {
                         Write-Log "    EKU: $($cert.EnhancedKeyUsageList.FriendlyName -join ', ')"
+                    }
+                }
+            } else {
+                Write-Log "No certificates found in LocalMachine\My store"
+            }
+        }
+    }
+
+    if ($machineCert) {
+        Write-Log "Machine certificate found: $($machineCert.Subject)"
+        Write-Log "Certificate thumbprint: $($machineCert.Thumbprint)"
+
+        # Add HTTPS binding to Default Web Site if it doesn't exist
+        $existingBinding = Get-WebBinding -Name "Default Web Site" -Protocol https -Port 443 -ErrorAction SilentlyContinue
+        if (-not $existingBinding) {
+            New-WebBinding -Name "Default Web Site" `
+                -Protocol https `
+                -Port 443 `
+                -SslFlags 0 `
+                -ErrorAction Stop
+            Write-Log "HTTPS binding created on port 443"
+        } else {
+            Write-Log "HTTPS binding already exists"
+        }
+
+        # Bind the certificate using the modern approach
+        try {
+            # Remove any existing SSL binding for 0.0.0.0:443
+            if (Test-Path "IIS:\SslBindings\0.0.0.0!443") {
+                Remove-Item -Path "IIS:\SslBindings\0.0.0.0!443" -Force
+                Write-Log "Removed existing SSL binding"
+            }
 
             # Create new SSL binding with certificate
             Get-Item -Path "Cert:\LocalMachine\My\$($machineCert.Thumbprint)" | `
