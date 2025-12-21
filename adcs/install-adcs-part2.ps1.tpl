@@ -598,3 +598,145 @@ try {
                     Write-Log "  Subject: $($cert.Subject), Issuer: $($cert.Issuer)"
                     if ($cert.EnhancedKeyUsageList) {
                         Write-Log "    EKU: $($cert.EnhancedKeyUsageList.FriendlyName -join ', ')"
+
+            # Create new SSL binding with certificate
+            Get-Item -Path "Cert:\LocalMachine\My\$($machineCert.Thumbprint)" | `
+                New-Item -Path "IIS:\SslBindings\0.0.0.0!443" -Force | Out-Null
+
+            Write-Log "HTTPS binding configured with machine certificate"
+        } catch {
+            Write-Log "WARNING: Modern SSL binding method failed: $_"
+            Write-Log "Attempting fallback method..."
+
+            # Fallback to deprecated method if modern approach fails
+            try {
+                $binding = Get-WebBinding -Name "Default Web Site" -Protocol https -Port 443
+                $binding.AddSslCertificate($machineCert.Thumbprint, "my")
+                Write-Log "HTTPS binding configured using fallback method"
+            } catch {
+                Write-Log "ERROR: Both SSL binding methods failed: $_"
+            }
+        }
+    } else {
+        Write-Log "WARNING: Machine certificate not found for HTTPS binding"
+        Write-Log "HTTPS will not be available - certificate may enroll after group policy refresh"
+        Write-Log "Run 'gpupdate /force' and check Cert:\LocalMachine\My for machine certificates"
+    }
+
+    # Restart IIS
+    iisreset
+    Write-Log "IIS restarted"
+
+} catch {
+    Write-Log "ERROR configuring IIS: $_"
+}
+
+#--------------------------------------------------------------
+# Step 11: Configure Certificate Template Permissions
+#--------------------------------------------------------------
+Write-Log "Step 11: Configuring certificate template permissions..."
+
+try {
+    # Grant permissions on the template for Domain Computers and Authenticated Users
+    $configNC = (Get-ADRootDSE).configurationNamingContext
+    $templateDN = "CN=$templateName,CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
+
+    Write-Log "Template DN: $templateDN"
+
+    # Get the template object
+    $template = Get-ADObject -Identity $templateDN -Properties nTSecurityDescriptor -ErrorAction Stop
+
+    # Get current ACL
+    $acl = $template.nTSecurityDescriptor
+
+    # Add Read and Enroll permissions for Domain Computers
+    $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-21-*-515")  # Well-known SID pattern
+    # Get actual Domain Computers group SID
+    $domainComputersGroup = Get-ADGroup -Identity "Domain Computers" -ErrorAction Stop
+    $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier($domainComputersGroup.SID)
+
+    # Create access rule: Read (GenericRead) + Enroll (ExtendedRight with specific GUID)
+    $enrollGuid = New-Object Guid "0e10c968-78fb-11d2-90d4-00c04f79dc55"  # Certificate-Enrollment extended right
+    $autoEnrollGuid = New-Object Guid "a05b8cc2-17bc-4802-a710-e7c15ab866a2"  # Certificate-AutoEnrollment extended right
+
+    $readRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        $domainComputersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    $enrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        $domainComputersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        $enrollGuid,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    $autoEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        $domainComputersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        $autoEnrollGuid,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    # Add rules to ACL
+    $acl.AddAccessRule($readRule)
+    $acl.AddAccessRule($enrollRule)
+    $acl.AddAccessRule($autoEnrollRule)
+
+    Write-Log "Added Read, Enroll, and AutoEnroll permissions for Domain Computers"
+
+    # Also add permissions for Authenticated Users (for NDES service account)
+    $authUsersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-11")  # Authenticated Users
+
+    $authReadRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        $authUsersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    $authEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+        $authUsersSID,
+        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+        [System.Security.AccessControl.AccessControlType]::Allow,
+        $enrollGuid,
+        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    )
+
+    $acl.AddAccessRule($authReadRule)
+    $acl.AddAccessRule($authEnrollRule)
+
+    Write-Log "Added Read and Enroll permissions for Authenticated Users"
+
+    # Apply the modified ACL
+    Set-ADObject -Identity $templateDN -Replace @{nTSecurityDescriptor=$acl} -ErrorAction Stop
+
+    Write-Log "Certificate template permissions configured successfully"
+
+    # Display template info for verification
+    certutil -dstemplate $templateName | Out-String | ForEach-Object { Write-Log "  $_" }
+
+} catch {
+    Write-Log "ERROR configuring template permissions: $_"
+    Write-Log "Template may still work but enrollment permissions might be restricted"
+}
+
+Write-Log "=========================================="
+Write-Log "ADCS/NDES Installation Complete!"
+Write-Log "=========================================="
+Write-Log ""
+Write-Log "NDES URL: http://$(hostname)/certsrv/mscep/mscep.dll"
+Write-Log "Certificate Template: $templateName"
+Write-Log "CA Common Name: $caCommonName"
+Write-Log ""
+Write-Log "For StrongDM Gateway configuration:"
+Write-Log "  SDM_ADCS_USER=${domain_admin_user}@${domain_fqdn}"
+Write-Log "  SDM_ADCS_PW=<use domain admin password>"
+Write-Log ""
+
+# Remove scheduled task
+Unregister-ScheduledTask -TaskName "ADCSInstallPart2" -Confirm:$false -ErrorAction SilentlyContinue
