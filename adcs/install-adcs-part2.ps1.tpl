@@ -375,6 +375,30 @@ try {
 }
 
 #--------------------------------------------------------------
+# Step 6.5: Install Active Directory PowerShell Module
+#--------------------------------------------------------------
+Write-Log "Step 6.5: Installing Active Directory PowerShell module..."
+
+try {
+    $adModule = Get-WindowsFeature -Name RSAT-AD-PowerShell
+
+    if ($adModule.InstallState -ne "Installed") {
+        Write-Log "Installing RSAT-AD-PowerShell feature..."
+        Install-WindowsFeature -Name RSAT-AD-PowerShell -IncludeAllSubFeature -ErrorAction Stop
+        Write-Log "AD PowerShell module installed successfully"
+    } else {
+        Write-Log "AD PowerShell module already installed"
+    }
+
+    # Import the module
+    Import-Module ActiveDirectory -ErrorAction Stop
+    Write-Log "Active Directory module imported successfully"
+} catch {
+    Write-Log "ERROR installing/importing AD module: $_"
+    exit 1
+}
+
+#--------------------------------------------------------------
 # Step 7: Create StrongDM Certificate Template
 #--------------------------------------------------------------
 Write-Log "Step 7: Creating StrongDM certificate template..."
@@ -459,14 +483,13 @@ try {
 Write-Log "Step 8: Configuring NDES..."
 
 try {
-    # Create service account credential (using domain admin for now)
-    # NOTE: Credential not logged for security
-    $securePassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
-    $serviceCredential = New-Object System.Management.Automation.PSCredential("$domainFQDN\$domainAdmin", $securePassword)
-
     # Install ADCS Network Device Enrollment Service
+    # Using domain admin account for NDES service
+    $securePassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
+
     Install-AdcsNetworkDeviceEnrollmentService `
-        -ApplicationPoolIdentity `
+        -ServiceAccountName "$domainFQDN\$domainAdmin" `
+        -ServiceAccountPassword $securePassword `
         -CAConfig "$dcFQDN\\$domainName-CA" `
         -RAName "StrongDM NDES RA" `
         -RAEmail "ndes@$domainFQDN" `
@@ -479,7 +502,6 @@ try {
         -SigningKeyLength 2048 `
         -EncryptionProviderName "Microsoft Strong Cryptographic Provider" `
         -EncryptionKeyLength 2048 `
-        -ServiceAccountCredential $serviceCredential `
         -Force `
         -ErrorAction Stop
 
