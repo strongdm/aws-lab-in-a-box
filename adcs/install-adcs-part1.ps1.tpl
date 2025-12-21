@@ -123,13 +123,14 @@ try {
     }
 
     # Create scheduled task to run Part 2 after reboot
+    # IMPORTANT: Must run as domain admin to have sufficient privileges for NDES configuration
     $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$scriptPath`""
     $trigger = New-ScheduledTaskTrigger -AtStartup
-    $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId "$domainFQDN\$domainAdmin" -LogonType Password -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
-    Register-ScheduledTask -TaskName "ADCSInstallPart2" -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
-    Write-Log "Scheduled task 'ADCSInstallPart2' created for post-reboot execution"
+    Register-ScheduledTask -TaskName "ADCSInstallPart2" -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Password $domainPassword -Force
+    Write-Log "Scheduled task 'ADCSInstallPart2' created for post-reboot execution as $domainFQDN\$domainAdmin"
 
     # Reboot to complete domain join
     Write-Log "Rebooting system to complete domain join..."

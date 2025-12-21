@@ -393,8 +393,21 @@ try {
     # Import the module
     Import-Module ActiveDirectory -ErrorAction Stop
     Write-Log "Active Directory module imported successfully"
+
+    # Test connection to DC and ADWS
+    Write-Log "Testing connection to Domain Controller: $dcFQDN"
+    $dcTest = Test-Connection -ComputerName $dcFQDN -Count 2 -Quiet
+    if (-not $dcTest) {
+        Write-Log "WARNING: Cannot ping Domain Controller at $dcFQDN"
+    }
+
+    # Verify ADWS is accessible
+    Write-Log "Verifying Active Directory Web Services on DC..."
+    $adRootDSE = Get-ADRootDSE -Server $dcFQDN -ErrorAction Stop
+    Write-Log "Successfully connected to AD Web Services on $dcFQDN"
 } catch {
-    Write-Log "ERROR installing/importing AD module: $_"
+    Write-Log "ERROR installing/importing AD module or connecting to DC: $_"
+    Write-Log "Ensure Active Directory Web Services is running on $dcFQDN"
     exit 1
 }
 
@@ -405,13 +418,14 @@ Write-Log "Step 7: Creating StrongDM certificate template..."
 
 try {
     # Connect to AD Certificate Services
-    $configNC = (Get-ADRootDSE).configurationNamingContext
+    $configNC = (Get-ADRootDSE -Server $dcFQDN).configurationNamingContext
     $templateContainer = "CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
 
     Write-Log "Certificate template container: $templateContainer"
 
     # Get Smart Card Logon template as source
-    $sourceTemplate = Get-ADObject -SearchBase $templateContainer `
+    $sourceTemplate = Get-ADObject -Server $dcFQDN `
+        -SearchBase $templateContainer `
         -Filter {cn -eq "SmartcardLogon"} `
         -Properties * `
         -ErrorAction Stop
@@ -424,7 +438,8 @@ try {
         $newTemplateDN = "CN=$newTemplateName,$templateContainer"
 
         # Check if template already exists
-        $existingTemplate = Get-ADObject -SearchBase $templateContainer `
+        $existingTemplate = Get-ADObject -Server $dcFQDN `
+            -SearchBase $templateContainer `
             -Filter {cn -eq $newTemplateName} `
             -ErrorAction SilentlyContinue
 
@@ -453,7 +468,8 @@ try {
                 "revision" = 100
             }
 
-            New-ADObject -Name $newTemplateName `
+            New-ADObject -Server $dcFQDN `
+                -Name $newTemplateName `
                 -Type pKICertificateTemplate `
                 -Path $templateContainer `
                 -OtherAttributes $templateAttributes `
@@ -678,13 +694,13 @@ Write-Log "Step 11: Configuring certificate template permissions..."
 
 try {
     # Grant permissions on the template for Domain Computers and Authenticated Users
-    $configNC = (Get-ADRootDSE).configurationNamingContext
+    $configNC = (Get-ADRootDSE -Server $dcFQDN).configurationNamingContext
     $templateDN = "CN=$templateName,CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
 
     Write-Log "Template DN: $templateDN"
 
     # Get the template object
-    $template = Get-ADObject -Identity $templateDN -Properties nTSecurityDescriptor -ErrorAction Stop
+    $template = Get-ADObject -Server $dcFQDN -Identity $templateDN -Properties nTSecurityDescriptor -ErrorAction Stop
 
     # Get current ACL
     $acl = $template.nTSecurityDescriptor
@@ -692,7 +708,7 @@ try {
     # Add Read and Enroll permissions for Domain Computers
     $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-21-*-515")  # Well-known SID pattern
     # Get actual Domain Computers group SID
-    $domainComputersGroup = Get-ADGroup -Identity "Domain Computers" -ErrorAction Stop
+    $domainComputersGroup = Get-ADGroup -Server $dcFQDN -Identity "Domain Computers" -ErrorAction Stop
     $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier($domainComputersGroup.SID)
 
     # Create access rule: Read (GenericRead) + Enroll (ExtendedRight with specific GUID)
@@ -753,7 +769,7 @@ try {
     Write-Log "Added Read and Enroll permissions for Authenticated Users"
 
     # Apply the modified ACL
-    Set-ADObject -Identity $templateDN -Replace @{nTSecurityDescriptor=$acl} -ErrorAction Stop
+    Set-ADObject -Server $dcFQDN -Identity $templateDN -Replace @{nTSecurityDescriptor=$acl} -ErrorAction Stop
 
     Write-Log "Certificate template permissions configured successfully"
 
