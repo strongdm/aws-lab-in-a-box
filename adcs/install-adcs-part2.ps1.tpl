@@ -499,29 +499,94 @@ try {
 Write-Log "Step 8: Configuring NDES..."
 
 try {
-    # Install ADCS Network Device Enrollment Service
-    # Using domain admin account for NDES service
-    $securePassword = ConvertTo-SecureString "$domainPassword" -AsPlainText -Force
+    # NDES configuration requires domain admin privileges
+    # Create a PowerShell script to run with domain admin credentials via scheduled task
+    $ndesConfigScript = @"
+`$ErrorActionPreference = 'Stop'
+`$logFile = 'C:\ADCSSetup.log'
+function Write-Log {
+    param([string]`$Message)
+    `$timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    `$logMessage = "[`$timestamp] `$Message"
+    Add-Content -Path `$logFile -Value `$logMessage
+}
 
-    Install-AdcsNetworkDeviceEnrollmentService `
-        -ServiceAccountName "$domainFQDN\$domainAdmin" `
-        -ServiceAccountPassword $securePassword `
-        -CAConfig "$dcFQDN\\$domainName-CA" `
-        -RAName "StrongDM NDES RA" `
-        -RAEmail "ndes@$domainFQDN" `
-        -RACompany "StrongDM" `
-        -RADepartment "IT" `
-        -RACity "San Mateo" `
-        -RAState "CA" `
-        -RACountry "US" `
-        -SigningProviderName "Microsoft Strong Cryptographic Provider" `
-        -SigningKeyLength 2048 `
-        -EncryptionProviderName "Microsoft Strong Cryptographic Provider" `
-        -EncryptionKeyLength 2048 `
-        -Force `
+try {
+    Write-Log "Running NDES configuration with domain admin credentials..."
+    `$securePassword = ConvertTo-SecureString '$domainPassword' -AsPlainText -Force
+
+    Install-AdcsNetworkDeviceEnrollmentService ``
+        -ServiceAccountName '$domainFQDN\$domainAdmin' ``
+        -ServiceAccountPassword `$securePassword ``
+        -CAConfig '$dcFQDN\\$domainName-CA' ``
+        -RAName 'StrongDM NDES RA' ``
+        -RAEmail 'ndes@$domainFQDN' ``
+        -RACompany 'StrongDM' ``
+        -RADepartment 'IT' ``
+        -RACity 'San Mateo' ``
+        -RAState 'CA' ``
+        -RACountry 'US' ``
+        -SigningProviderName 'Microsoft Strong Cryptographic Provider' ``
+        -SigningKeyLength 2048 ``
+        -EncryptionProviderName 'Microsoft Strong Cryptographic Provider' ``
+        -EncryptionKeyLength 2048 ``
+        -Force ``
         -ErrorAction Stop
 
     Write-Log "NDES configured successfully"
+    exit 0
+} catch {
+    Write-Log "ERROR configuring NDES: `$_"
+    exit 1
+}
+"@
+
+    $ndesScriptPath = "C:\ConfigureNDES.ps1"
+    Set-Content -Path $ndesScriptPath -Value $ndesConfigScript
+
+    Write-Log "Created NDES configuration script at $ndesScriptPath"
+
+    # Create scheduled task to run NDES configuration with domain admin
+    $taskName = "ConfigureNDES"
+    $taskAction = "PowerShell.exe -ExecutionPolicy Bypass -File `"$ndesScriptPath`""
+
+    schtasks.exe /create `
+        /tn $taskName `
+        /tr $taskAction `
+        /sc once `
+        /st 00:00 `
+        /ru "$domainFQDN\$domainAdmin" `
+        /rp "$domainPassword" `
+        /rl HIGHEST `
+        /f | Out-Null
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create scheduled task for NDES configuration"
+    }
+
+    Write-Log "Created scheduled task to configure NDES"
+
+    # Run the task immediately
+    schtasks.exe /run /tn $taskName | Out-Null
+    Write-Log "Started NDES configuration task"
+
+    # Wait for task to complete
+    Start-Sleep -Seconds 30
+
+    # Check task result
+    $taskInfo = schtasks.exe /query /tn $taskName /fo csv /v | ConvertFrom-Csv
+    $lastResult = $taskInfo.'Last Result'
+
+    if ($lastResult -eq "0") {
+        Write-Log "NDES configuration task completed successfully"
+    } else {
+        Write-Log "WARNING: NDES configuration task exit code: $lastResult"
+    }
+
+    # Clean up
+    schtasks.exe /delete /tn $taskName /f | Out-Null
+    Remove-Item -Path $ndesScriptPath -Force -ErrorAction SilentlyContinue
+
 } catch {
     Write-Log "ERROR configuring NDES: $_"
 }

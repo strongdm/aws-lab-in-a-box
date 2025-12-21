@@ -123,24 +123,23 @@ try {
     }
 
     # Create scheduled task to run Part 2 after reboot
-    # IMPORTANT: Must run as domain admin to have sufficient privileges for NDES configuration
-    Write-Log "Creating scheduled task to run Part 2 after reboot as domain admin..."
+    # Note: Create as SYSTEM first (before domain join), then Part 2 will use domain credentials for AD operations
+    Write-Log "Creating scheduled task to run Part 2 after reboot..."
 
     $taskName = "ADCSInstallPart2"
     $taskAction = "PowerShell.exe -ExecutionPolicy Bypass -File `"$scriptPath`""
 
-    # Use schtasks.exe to create task with domain admin credentials
+    # Create task as SYSTEM since we're not domain-joined yet
     $result = schtasks.exe /create `
         /tn $taskName `
         /tr $taskAction `
         /sc onstart `
-        /ru "$domainFQDN\$domainAdmin" `
-        /rp "$domainPassword" `
+        /ru "SYSTEM" `
         /rl HIGHEST `
         /f
 
     if ($LASTEXITCODE -eq 0) {
-        Write-Log "Scheduled task '$taskName' created successfully as $domainFQDN\$domainAdmin"
+        Write-Log "Scheduled task '$taskName' created successfully"
     } else {
         Write-Log "ERROR creating scheduled task: $result"
         exit 1
