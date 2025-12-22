@@ -816,17 +816,37 @@ CertificateTemplate=WebServer
             "[DCInstall] Created certificate request INF for ADCS server"
 
             # Generate certificate request
-            "[DCInstall] Running: certreq -new $infFile $reqFile"
-            $newOutput = certreq -new $infFile $reqFile 2>&1
+            # Note: Use -user flag to explicitly create in user context (avoids the conflict prompt)
+            "[DCInstall] Running: certreq -new -user $infFile $reqFile"
+            $newOutput = certreq -new -user $infFile $reqFile 2>&1
             "[DCInstall] certreq -new result: $newOutput"
             if (-not (Test-Path $reqFile)) {
                 throw "Failed to create certificate request file"
             }
             "[DCInstall] Generated certificate request for ADCS server"
 
-            # Submit to local CA (config "." means local CA)
-            "[DCInstall] Running: certreq -submit -config `".`" $reqFile $cerFile"
-            $submitOutput = certreq -submit -config "." $reqFile $cerFile 2>&1
+            # Submit to local CA with explicit CA configuration
+            # Note: Must use full "Server\CAName" format, not "." when using user context certificates
+            $caConfigLines = certutil 2>&1 | Select-String -Pattern "Config:"
+            if ($caConfigLines) {
+                # Get the first Config line (the local CA on this DC)
+                $caConfigLine = $caConfigLines | Select-Object -First 1
+                $caConfig = $caConfigLine.ToString() -replace '.*"([^"]+)".*', '$1'
+                "[DCInstall] Detected CA config: $caConfig"
+            } else {
+                # Fallback: construct from registry
+                $caName = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration" -ErrorAction SilentlyContinue).PSChildName | Select-Object -First 1
+                if ($caName) {
+                    $computerFqdn = [System.Net.Dns]::GetHostByName($env:COMPUTERNAME).HostName
+                    $caConfig = "$computerFqdn\$caName"
+                    "[DCInstall] Constructed CA config from registry: $caConfig"
+                } else {
+                    throw "Could not determine CA configuration"
+                }
+            }
+
+            "[DCInstall] Running: certreq -submit -config `"$caConfig`" $reqFile $cerFile"
+            $submitOutput = certreq -submit -config "$caConfig" $reqFile $cerFile 2>&1
             "[DCInstall] certreq -submit result: $submitOutput"
             if (-not (Test-Path $cerFile)) {
                 throw "Failed to submit certificate request - certificate file not created"
