@@ -351,7 +351,7 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         "[DCInstall] Configuring Group Policy for StrongDM..."
 
         # Define GPO name and domain settings
-        $GPOName = "Disable NLA and Enable Smart Card Authentication"
+        $GPOName = "Enable Smart Card Authentication"
         $Domain = "DC=${name},DC=local"
 
         # Create a new GPO if it doesn't exist
@@ -377,14 +377,6 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
             "[DCInstall] Smart Card Service enabled to start automatically in GPO"
         } catch {
             "[DCInstall] ERROR: Failed to set Smart Card Service registry value: $_"
-        }
-
-        # Set certificate enforcement per KB5014754
-        try {
-            New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Kdc" -Name "StrongCertificateBindingEnforcement" -PropertyType DWORD -Value 1 -Force
-            "[DCInstall] Strong Certificate Binding Enforcement configured"
-        } catch {
-            "[DCInstall] ERROR: Couldn't set certificate enforcement. Certificate logins may fail: $_"
         }
 
         # Link the GPO to the domain
