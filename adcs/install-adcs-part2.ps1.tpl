@@ -375,9 +375,35 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 7: Configure NDES
+# Step 7: Add Domain Admin to IIS_IUSRS Group
 #--------------------------------------------------------------
-Write-Log "Step 7: Configuring NDES..."
+Write-Log "Step 7: Adding domain admin to IIS_IUSRS group..."
+
+try {
+    # NDES service account must be a member of IIS_IUSRS group
+    $iisGroup = [ADSI]"WinNT://./IIS_IUSRS,group"
+    $domainUser = [ADSI]"WinNT://$domainFQDN/$domainAdmin,user"
+
+    # Check if user is already a member
+    $members = @($iisGroup.PSBase.Invoke("Members")) | ForEach-Object {
+        $_.GetType().InvokeMember("Name", 'GetProperty', $null, $_, $null)
+    }
+
+    if ($members -notcontains $domainAdmin) {
+        $iisGroup.Add($domainUser.Path)
+        Write-Log "Added $domainFQDN\$domainAdmin to IIS_IUSRS group"
+    } else {
+        Write-Log "Domain admin already member of IIS_IUSRS group"
+    }
+} catch {
+    Write-Log "ERROR adding domain admin to IIS_IUSRS group: $_"
+    Write-Log "NDES configuration may fail without this membership"
+}
+
+#--------------------------------------------------------------
+# Step 8: Configure NDES
+#--------------------------------------------------------------
+Write-Log "Step 8: Configuring NDES..."
 
 try {
     # NDES configuration requires domain admin privileges
@@ -473,9 +499,9 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 8: Configure NDES Registry Settings
+# Step 9: Configure NDES Registry Settings
 #--------------------------------------------------------------
-Write-Log "Step 8: Configuring NDES registry for StrongDM template..."
+Write-Log "Step 9: Configuring NDES registry for StrongDM template..."
 
 try {
     $mscepPath = "HKLM:\Software\Microsoft\Cryptography\MSCEP"
@@ -503,9 +529,9 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 9: Enable IIS Basic Authentication
+# Step 10: Enable IIS Basic Authentication
 #--------------------------------------------------------------
-Write-Log "Step 9: Enabling IIS Basic Authentication for NDES..."
+Write-Log "Step 10: Enabling IIS Basic Authentication for NDES..."
 
 try {
     Import-Module WebAdministration
