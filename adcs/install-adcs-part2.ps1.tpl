@@ -410,10 +410,11 @@ try {
     Write-Log "Running NDES configuration with domain admin credentials..."
     `$securePassword = ConvertTo-SecureString '$domainPassword' -AsPlainText -Force
 
+    # NOTE: When ADCS CA is on the same server as NDES, do NOT specify -CAConfig
+    # NDES will automatically use the local CA
     Install-AdcsNetworkDeviceEnrollmentService ``
         -ServiceAccountName '$domainFQDN\$domainAdmin' ``
         -ServiceAccountPassword `$securePassword ``
-        -CAConfig '$dcFQDN\\$domainName-CA' ``
         -RAName 'StrongDM NDES RA' ``
         -RAEmail 'ndes@$domainFQDN' ``
         -RACompany 'StrongDM' ``
@@ -541,6 +542,64 @@ try {
         $appPool.managedPipelineMode = "Integrated"
         $appPool | Set-Item
         Write-Log "SCEP Application Pool set to Integrated mode"
+    }
+
+    # Request a Web Server certificate for HTTPS
+    Write-Log "Requesting Web Server certificate for $computerName.$domainFQDN..."
+
+    try {
+        # Create a certificate request INF file
+        $certReqInf = @"
+[Version]
+Signature="`$Windows NT`$"
+
+[NewRequest]
+Subject = "CN=$computerName.$domainFQDN"
+KeySpec = 1
+KeyLength = 2048
+Exportable = TRUE
+MachineKeySet = TRUE
+SMIME = FALSE
+PrivateKeyArchive = FALSE
+UserProtected = FALSE
+UseExistingKeySet = FALSE
+ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
+ProviderType = 12
+RequestType = PKCS10
+KeyUsage = 0xa0
+
+[EnhancedKeyUsageExtension]
+OID=1.3.6.1.5.5.7.3.1 ; Server Authentication
+
+[RequestAttributes]
+CertificateTemplate=WebServer
+"@
+
+        $infFile = "C:\WebServerCert.inf"
+        $reqFile = "C:\WebServerCert.req"
+        $cerFile = "C:\WebServerCert.cer"
+
+        Set-Content -Path $infFile -Value $certReqInf
+        Write-Log "Created certificate request INF file"
+
+        # Generate certificate request
+        certreq -new $infFile $reqFile
+        Write-Log "Generated certificate request"
+
+        # Submit request to local CA (auto-approved since CA is on same server)
+        certreq -submit -config "." $reqFile $cerFile
+        Write-Log "Submitted certificate request to local CA"
+
+        # Install the certificate
+        certreq -accept $cerFile
+        Write-Log "Web Server certificate installed successfully"
+
+        # Clean up temporary files
+        Remove-Item $infFile, $reqFile, $cerFile -Force -ErrorAction SilentlyContinue
+
+    } catch {
+        Write-Log "WARNING: Failed to request Web Server certificate: $_"
+        Write-Log "HTTPS binding may not work without this certificate"
     }
 
     # Configure HTTPS binding with machine certificate
