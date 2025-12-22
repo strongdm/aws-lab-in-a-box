@@ -791,16 +791,16 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                 -ErrorAction SilentlyContinue
 
             if (-not $existingTemplate) {
-                "[DCInstall] Creating new template '$templateName' based on Computer template..."
+                "[DCInstall] Creating new template '$templateName' based on Machine template..."
 
-                # Get Computer template as source
+                # Get Machine template as source (cn=Machine, displayName=Computer)
                 $sourceTemplate = Get-ADObject -SearchBase $templateContainer `
-                    -Filter {cn -eq "Computer"} `
+                    -Filter {cn -eq "Machine"} `
                     -Properties * `
                     -ErrorAction Stop
 
                 if ($sourceTemplate) {
-                    "[DCInstall] Source template 'Computer' found"
+                    "[DCInstall] Source template 'Machine' found"
 
                     # Generate OID for new template
                     $sourceOID = $sourceTemplate.'msPKI-Cert-Template-OID'
@@ -908,7 +908,7 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                     }
 
                 } else {
-                    "[DCInstall] WARNING: Computer template not found"
+                    "[DCInstall] WARNING: Machine template not found"
                 }
             } else {
                 "[DCInstall] Auto-enrollment template '$templateName' already exists"

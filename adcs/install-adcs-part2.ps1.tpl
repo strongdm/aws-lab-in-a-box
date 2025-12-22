@@ -496,13 +496,33 @@ Write-Log "Step 8: Triggering certificate auto-enrollment..."
 try {
     # Force Group Policy update to apply auto-enrollment GPO immediately
     Write-Log "Forcing Group Policy update to trigger auto-enrollment..."
-    gpupdate /force /target:computer 2>&1 | Out-Null
+    $gpResult = gpupdate /force /target:computer 2>&1 | Out-String
     Write-Log "Group Policy update completed"
+    Write-Log "GPUpdate result: $($gpResult.Trim())"
 
-    # Trigger certificate auto-enrollment manually
-    Write-Log "Triggering certificate auto-enrollment..."
-    certreq -autoenroll -machine 2>&1 | Out-Null
-    Write-Log "Auto-enrollment triggered"
+    # Verify GPO is applied
+    Write-Log "Verifying auto-enrollment GPO settings..."
+    $regPath = "HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment"
+    if (Test-Path $regPath) {
+        $aePolicy = Get-ItemProperty -Path $regPath -Name "AEPolicy" -ErrorAction SilentlyContinue
+        if ($aePolicy) {
+            Write-Log "Auto-enrollment policy value: $($aePolicy.AEPolicy)"
+        } else {
+            Write-Log "WARNING: Auto-enrollment policy not found in registry"
+        }
+    } else {
+        Write-Log "WARNING: Auto-enrollment registry path not found"
+    }
+
+    # Check available certificate templates
+    Write-Log "Checking available certificate templates..."
+    $templatesResult = certutil -TCAInfo 2>&1 | Out-String
+    Write-Log "Available templates: $($templatesResult.Trim())"
+
+    # Trigger certificate auto-enrollment with quiet flag for unattended operation
+    Write-Log "Triggering certificate auto-enrollment (unattended)..."
+    $autoenrollResult = certreq -autoenroll -machine -q 2>&1 | Out-String
+    Write-Log "Auto-enrollment result: $($autoenrollResult.Trim())"
 
     # Wait for certificate to appear (auto-enrollment may take a moment)
     Write-Log "Waiting for auto-enrolled certificate to appear..."
