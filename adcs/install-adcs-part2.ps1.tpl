@@ -430,6 +430,59 @@ try {
         -ErrorAction Stop
 
     Write-Log "NDES configured successfully"
+
+    # Request Web Server certificate for HTTPS (must run as domain admin)
+    Write-Log "Requesting Web Server certificate for $computerName.$domainFQDN..."
+
+    try {
+        `$certReqInf = @`"
+[Version]
+Signature=```"`$Windows NT```"`"
+
+[NewRequest]
+Subject = `"CN=$computerName.$domainFQDN`"
+KeySpec = 1
+KeyLength = 2048
+Exportable = TRUE
+MachineKeySet = TRUE
+SMIME = FALSE
+PrivateKeyArchive = FALSE
+UserProtected = FALSE
+UseExistingKeySet = FALSE
+ProviderName = `"Microsoft RSA SChannel Cryptographic Provider`"
+ProviderType = 12
+RequestType = PKCS10
+KeyUsage = 0xa0
+
+[EnhancedKeyUsageExtension]
+OID=1.3.6.1.5.5.7.3.1
+
+[RequestAttributes]
+CertificateTemplate=WebServer
+`"@
+
+        `$infFile = `"C:\WebServerCert.inf`"
+        `$reqFile = `"C:\WebServerCert.req`"
+        `$cerFile = `"C:\WebServerCert.cer`"
+
+        Set-Content -Path `$infFile -Value `$certReqInf
+        Write-Log `"Created certificate request INF file`"
+
+        certreq -new `$infFile `$reqFile | Out-Null
+        Write-Log `"Generated certificate request`"
+
+        certreq -submit -config `".`" `$reqFile `$cerFile | Out-Null
+        Write-Log `"Submitted certificate request to local CA`"
+
+        certreq -accept `$cerFile | Out-Null
+        Write-Log `"Web Server certificate installed successfully`"
+
+        Remove-Item `$infFile, `$reqFile, `$cerFile -Force -ErrorAction SilentlyContinue
+
+    } catch {
+        Write-Log `"WARNING: Failed to request Web Server certificate: `$_`"
+    }
+
     exit 0
 } catch {
     Write-Log "ERROR configuring NDES: `$_"
@@ -544,94 +597,29 @@ try {
         Write-Log "SCEP Application Pool set to Integrated mode"
     }
 
-    # Request a Web Server certificate for HTTPS
-    Write-Log "Requesting Web Server certificate for $computerName.$domainFQDN..."
-
-    try {
-        # Create a certificate request INF file
-        $certReqInf = @"
-[Version]
-Signature="`$Windows NT`$"
-
-[NewRequest]
-Subject = "CN=$computerName.$domainFQDN"
-KeySpec = 1
-KeyLength = 2048
-Exportable = TRUE
-MachineKeySet = TRUE
-SMIME = FALSE
-PrivateKeyArchive = FALSE
-UserProtected = FALSE
-UseExistingKeySet = FALSE
-ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
-ProviderType = 12
-RequestType = PKCS10
-KeyUsage = 0xa0
-
-[EnhancedKeyUsageExtension]
-OID=1.3.6.1.5.5.7.3.1 ; Server Authentication
-
-[RequestAttributes]
-CertificateTemplate=WebServer
-"@
-
-        $infFile = "C:\WebServerCert.inf"
-        $reqFile = "C:\WebServerCert.req"
-        $cerFile = "C:\WebServerCert.cer"
-
-        Set-Content -Path $infFile -Value $certReqInf
-        Write-Log "Created certificate request INF file"
-
-        # Generate certificate request
-        certreq -new $infFile $reqFile
-        Write-Log "Generated certificate request"
-
-        # Submit request to local CA (auto-approved since CA is on same server)
-        certreq -submit -config "." $reqFile $cerFile
-        Write-Log "Submitted certificate request to local CA"
-
-        # Install the certificate
-        certreq -accept $cerFile
-        Write-Log "Web Server certificate installed successfully"
-
-        # Clean up temporary files
-        Remove-Item $infFile, $reqFile, $cerFile -Force -ErrorAction SilentlyContinue
-
-    } catch {
-        Write-Log "WARNING: Failed to request Web Server certificate: $_"
-        Write-Log "HTTPS binding may not work without this certificate"
-    }
-
     # Configure HTTPS binding with machine certificate
+    # Note: Web Server certificate is requested by the NDES configuration script (runs as domain admin)
     Write-Log "Configuring HTTPS binding for NDES..."
+    Write-Log "Waiting for Web Server certificate to be available..."
 
-    # Get the machine certificate from the local computer's personal store
-    # The certificate will be auto-enrolled from the domain CA
-    Write-Log "Waiting for machine certificate auto-enrollment..."
-
-    # Try to find machine cert, with retries
-    $maxRetries = 3
+    # Wait for the certificate request to complete (from scheduled task)
+    # The NDES config task should have requested and installed the certificate
+    $maxRetries = 6
     $retryCount = 0
     $machineCert = $null
 
     while ($retryCount -lt $maxRetries -and -not $machineCert) {
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds 5
 
         $machineCert = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue | Where-Object {
-            ($_.Subject -like "*$computerName*" -or $_.Subject -like "*$env:COMPUTERNAME*") -and
-            $_.EnhancedKeyUsageList.FriendlyName -contains "Server Authentication"
+            $_.Subject -like "CN=$computerName.$domainFQDN*" -and
+            $_.EnhancedKeyUsageList.ObjectId -contains "1.3.6.1.5.5.7.3.1"
         } | Select-Object -First 1
 
         $retryCount++
 
         if (-not $machineCert) {
-            Write-Log "Machine certificate not found (attempt $retryCount/$maxRetries)"
-
-            # Trigger group policy update to force certificate enrollment
-            if ($retryCount -eq 1) {
-                Write-Log "Triggering Group Policy update to force certificate enrollment..."
-                gpupdate /force /target:computer | Out-String | ForEach-Object { Write-Log "  $_" }
-            }
+            Write-Log "Web Server certificate not found yet (attempt $retryCount/$maxRetries)"
 
             # List available certificates for debugging
             $allCerts = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue
