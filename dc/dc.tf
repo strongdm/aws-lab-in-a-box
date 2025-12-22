@@ -263,7 +263,10 @@ resource "aws_iam_role_policy" "dc_s3_access" {
           "ssm:GetParameter",
           "ssm:DeleteParameter"
         ]
-        Resource = "arn:aws:ssm:*:*:parameter/${var.name}/dc/*"
+        Resource = [
+          "arn:aws:ssm:*:*:parameter/${var.name}/dc/*",
+          "arn:aws:ssm:*:*:parameter/${var.name}/adcs/*"
+        ]
       }
     ]
   })

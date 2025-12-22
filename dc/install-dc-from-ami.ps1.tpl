@@ -620,6 +620,22 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                     -ErrorAction SilentlyContinue
 
                 if (-not $existingTemplate) {
+                    # Generate a unique OID for this template
+                    # Use the source template's OID as base and generate a new one
+                    $sourceOID = $sourceTemplate.'msPKI-Cert-Template-OID'
+                    if ($sourceOID) {
+                        # Generate new OID by incrementing the last component
+                        $oidParts = $sourceOID -split '\.'
+                        $lastPart = [int]$oidParts[-1] + (Get-Random -Minimum 100 -Maximum 999)
+                        $oidParts[-1] = $lastPart.ToString()
+                        $newOID = $oidParts -join '.'
+                        "[DCInstall] Generated OID for template: $newOID"
+                    } else {
+                        # Fallback: create from scratch using Microsoft's private enterprise number
+                        $newOID = "1.3.6.1.4.1.311.21.8.$(Get-Random -Minimum 10000000 -Maximum 99999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1 -Maximum 99).1.$(Get-Random -Minimum 1 -Maximum 999)"
+                        "[DCInstall] Generated new OID from scratch: $newOID"
+                    }
+
                     # Copy template properties
                     $templateAttributes = @{
                         objectClass = "pKICertificateTemplate"
@@ -634,6 +650,7 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
                         "pKIExpirationPeriod" = [byte[]](0x00, 0x40, 0x39, 0x87, 0x2e, 0xe1, 0xfe, 0xff)
                         "pKIOverlapPeriod" = [byte[]](0x00, 0x3A, 0xA4, 0x6B, 0xF7, 0xFF, 0xFF, 0xFF)
                         "pKIExtendedKeyUsage" = @("1.3.6.1.4.1.311.20.2.2", "1.3.6.1.5.5.7.3.2")
+                        "msPKI-Cert-Template-OID" = $newOID
                         "msPKI-Certificate-Application-Policy" = @("1.3.6.1.4.1.311.20.2.2", "1.3.6.1.5.5.7.3.2")
                         "msPKI-Certificate-Name-Flag" = 1
                         "msPKI-Enrollment-Flag" = 41
@@ -786,7 +803,7 @@ KeyUsage = 0xa0
 OID=1.3.6.1.5.5.7.3.1
 
 [RequestAttributes]
-CertificateTemplate=Web Server
+CertificateTemplate=WebServer
 "@
 
             $infFile = "C:\ADCSWebServerCert.inf"
@@ -799,15 +816,27 @@ CertificateTemplate=Web Server
             "[DCInstall] Created certificate request INF for ADCS server"
 
             # Generate certificate request
-            certreq -new $infFile $reqFile
+            "[DCInstall] Running: certreq -new $infFile $reqFile"
+            $newOutput = certreq -new $infFile $reqFile 2>&1
+            "[DCInstall] certreq -new result: $newOutput"
+            if (-not (Test-Path $reqFile)) {
+                throw "Failed to create certificate request file"
+            }
             "[DCInstall] Generated certificate request for ADCS server"
 
-            # Submit to local CA
-            certreq -submit -config "." $reqFile $cerFile
+            # Submit to local CA (config "." means local CA)
+            "[DCInstall] Running: certreq -submit -config `".`" $reqFile $cerFile"
+            $submitOutput = certreq -submit -config "." $reqFile $cerFile 2>&1
+            "[DCInstall] certreq -submit result: $submitOutput"
+            if (-not (Test-Path $cerFile)) {
+                throw "Failed to submit certificate request - certificate file not created"
+            }
             "[DCInstall] Submitted certificate request to CA"
 
             # Accept and install certificate
-            certreq -accept $cerFile
+            "[DCInstall] Running: certreq -accept $cerFile"
+            $acceptOutput = certreq -accept $cerFile 2>&1
+            "[DCInstall] certreq -accept result: $acceptOutput"
             "[DCInstall] Certificate issued for ADCS server"
 
             # Export certificate with private key to PFX
@@ -824,22 +853,32 @@ CertificateTemplate=Web Server
 
                 # Store PFX in Parameter Store for ADCS server to retrieve
                 try {
+                    "[DCInstall] Importing AWS.Tools.SimpleSystemsManagement module..."
                     Import-Module AWS.Tools.SimpleSystemsManagement -ErrorAction Stop
+                    "[DCInstall] AWS module imported successfully"
 
                     # Read PFX file as base64
+                    "[DCInstall] Reading PFX file: $pfxFile"
                     $pfxBytes = [System.IO.File]::ReadAllBytes($pfxFile)
                     $pfxBase64 = [System.Convert]::ToBase64String($pfxBytes)
+                    "[DCInstall] PFX file encoded to base64 ($($pfxBytes.Length) bytes)"
 
                     # Store in Parameter Store
                     $paramNamePfx = "/${name}/adcs/webserver-cert-pfx"
                     $paramNamePassword = "/${name}/adcs/webserver-cert-password"
 
+                    "[DCInstall] Storing PFX in Parameter Store: $paramNamePfx"
                     Write-SSMParameter -Name $paramNamePfx -Value $pfxBase64 -Type "String" -Overwrite $true
+                    "[DCInstall] PFX stored successfully"
+
+                    "[DCInstall] Storing password in Parameter Store: $paramNamePassword"
                     Write-SSMParameter -Name $paramNamePassword -Value $pfxPassword -Type "SecureString" -Overwrite $true
+                    "[DCInstall] Password stored successfully"
 
                     "[DCInstall] Web Server certificate stored in Parameter Store"
                 } catch {
                     "[DCInstall] WARNING: Failed to store certificate in Parameter Store: $_"
+                    "[DCInstall] Exception details: $($_.Exception.Message)"
                 }
 
                 # Clean up certificate from current user store (not needed on DC)
@@ -847,12 +886,16 @@ CertificateTemplate=Web Server
 
                 # Clean up temporary files
                 Remove-Item $infFile, $reqFile, $cerFile, $pfxFile -Force -ErrorAction SilentlyContinue
+                "[DCInstall] Cleaned up temporary certificate files"
             } else {
-                "[DCInstall] WARNING: Could not find issued certificate"
+                "[DCInstall] WARNING: Could not find issued certificate for $adcsServerFqdn"
             }
+
+            "[DCInstall] Web Server certificate creation completed"
 
         } catch {
             "[DCInstall] WARNING: Failed to create Web Server certificate for ADCS: $_"
+            "[DCInstall] Exception details: $($_.Exception.Message)"
         }
 
         "Certificates and GPOs updated" | Out-File "C:\sdm.done"
