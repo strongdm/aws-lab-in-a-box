@@ -773,150 +773,194 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         }
 
         #--------------------------------------------------------------
-        # Create Web Server Certificate for ADCS Server
+        # Create Auto-Enrollment Certificate Template for ADCS Server
         #--------------------------------------------------------------
-        "[DCInstall] Creating Web Server certificate for ADCS server..."
+        "[DCInstall] Creating auto-enrollment certificate template for ADCS web server..."
 
         try {
-            # Create certificate request INF for ADCS server
-            $adcsServerFqdn = "${name}-adcs.${name}.local"
-            $certReqInf = @"
-[Version]
-Signature="`$Windows NT`$"
+            Import-Module ActiveDirectory -ErrorAction Stop
 
-[NewRequest]
-Subject = "CN=$adcsServerFqdn"
-KeySpec = 1
-KeyLength = 2048
-Exportable = TRUE
-MachineKeySet = FALSE
-SMIME = FALSE
-PrivateKeyArchive = FALSE
-UserProtected = FALSE
-UseExistingKeySet = FALSE
-ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
-ProviderType = 12
-RequestType = PKCS10
-KeyUsage = 0xa0
+            # Get configuration naming context
+            $configNC = (Get-ADRootDSE).configurationNamingContext
+            $templateContainer = "CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
 
-[EnhancedKeyUsageExtension]
-OID=1.3.6.1.5.5.7.3.1
+            # Check if template already exists
+            $templateName = "ADCS-WebServer"
+            $existingTemplate = Get-ADObject -SearchBase $templateContainer `
+                -Filter {cn -eq $templateName} `
+                -ErrorAction SilentlyContinue
 
-[RequestAttributes]
-CertificateTemplate=WebServer
-"@
+            if (-not $existingTemplate) {
+                "[DCInstall] Creating new template '$templateName' based on Computer template..."
 
-            $infFile = "C:\ADCSWebServerCert.inf"
-            $reqFile = "C:\ADCSWebServerCert.req"
-            $cerFile = "C:\ADCSWebServerCert.cer"
-            $pfxFile = "C:\ADCSWebServerCert.pfx"
-            $pfxPassword = "${password}"
+                # Get Computer template as source
+                $sourceTemplate = Get-ADObject -SearchBase $templateContainer `
+                    -Filter {cn -eq "Computer"} `
+                    -Properties * `
+                    -ErrorAction Stop
 
-            Set-Content -Path $infFile -Value $certReqInf
-            "[DCInstall] Created certificate request INF for ADCS server"
+                if ($sourceTemplate) {
+                    "[DCInstall] Source template 'Computer' found"
 
-            # Generate certificate request
-            # Note: Use -user flag to explicitly create in user context (avoids the conflict prompt)
-            "[DCInstall] Running: certreq -new -user $infFile $reqFile"
-            $newOutput = certreq -new -user $infFile $reqFile 2>&1
-            "[DCInstall] certreq -new result: $newOutput"
-            if (-not (Test-Path $reqFile)) {
-                throw "Failed to create certificate request file"
-            }
-            "[DCInstall] Generated certificate request for ADCS server"
+                    # Generate OID for new template
+                    $sourceOID = $sourceTemplate.'msPKI-Cert-Template-OID'
+                    if ($sourceOID) {
+                        $oidParts = $sourceOID -split '\.'
+                        $lastPart = [int]$oidParts[-1] + (Get-Random -Minimum 100 -Maximum 999)
+                        $oidParts[-1] = $lastPart.ToString()
+                        $newOID = $oidParts -join '.'
+                        "[DCInstall] Generated OID: $newOID"
+                    } else {
+                        $newOID = "1.3.6.1.4.1.311.21.8.$(Get-Random -Minimum 10000000 -Maximum 99999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1000000 -Maximum 9999999).$(Get-Random -Minimum 1 -Maximum 99).1.$(Get-Random -Minimum 1 -Maximum 999)"
+                        "[DCInstall] Generated new OID: $newOID"
+                    }
 
-            # Submit to local CA with explicit CA configuration
-            # Note: Must use full "Server\CAName" format, not "." when using user context certificates
-            $caConfigLines = certutil 2>&1 | Select-String -Pattern "Config:"
-            if ($caConfigLines) {
-                # Get the first Config line (the local CA on this DC)
-                $caConfigLine = $caConfigLines | Select-Object -First 1
-                $caConfig = $caConfigLine.ToString() -replace '.*"([^"]+)".*', '$1'
-                "[DCInstall] Detected CA config: $caConfig"
-            } else {
-                # Fallback: construct from registry
-                $caName = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration" -ErrorAction SilentlyContinue).PSChildName | Select-Object -First 1
-                if ($caName) {
-                    $computerFqdn = [System.Net.Dns]::GetHostByName($env:COMPUTERNAME).HostName
-                    $caConfig = "$computerFqdn\$caName"
-                    "[DCInstall] Constructed CA config from registry: $caConfig"
+                    # Create template with auto-enrollment settings
+                    $templateAttributes = @{
+                        objectClass = "pKICertificateTemplate"
+                        cn = $templateName
+                        name = $templateName
+                        displayName = "ADCS Web Server Auto-Enrollment"
+                        flags = 66113  # PEND_ALL_REQUESTS | PUBLISH_TO_DS | AUTO_ENROLLMENT
+                        "pKIDefaultKeySpec" = 1
+                        "pKIKeyUsage" = [byte[]](0xa0, 0x00)
+                        "pKIMaxIssuingDepth" = 0
+                        "pKICriticalExtensions" = @("2.5.29.15")
+                        "pKIExpirationPeriod" = [byte[]](0x00, 0x80, 0xa6, 0x0a, 0xff, 0xde, 0xff, 0xff)  # 2 years
+                        "pKIOverlapPeriod" = [byte[]](0x00, 0x80, 0xa6, 0x0a, 0xff, 0xde, 0xff, 0xff)  # 6 weeks
+                        "pKIExtendedKeyUsage" = @("1.3.6.1.5.5.7.3.1")  # Server Authentication
+                        "msPKI-Cert-Template-OID" = $newOID
+                        "msPKI-Certificate-Application-Policy" = @("1.3.6.1.5.5.7.3.1")  # Server Authentication
+                        "msPKI-Certificate-Name-Flag" = 134217728  # SUBJECT_ALT_REQUIRE_DNS | SUBJECT_REQUIRE_DNS_AS_CN
+                        "msPKI-Enrollment-Flag" = 41  # AUTO_ENROLLMENT | PUBLISH_TO_DS
+                        "msPKI-Minimal-Key-Size" = 2048
+                        "msPKI-Private-Key-Flag" = 101056512  # REQUIRE_PRIVATE_KEY_ARCHIVAL
+                        "msPKI-RA-Signature" = 0
+                        "msPKI-Template-Minor-Revision" = 1
+                        "msPKI-Template-Schema-Version" = 2
+                        "revision" = 100
+                    }
+
+                    New-ADObject -Name $templateName `
+                        -Type pKICertificateTemplate `
+                        -Path $templateContainer `
+                        -OtherAttributes $templateAttributes `
+                        -ErrorAction Stop
+
+                    "[DCInstall] Certificate template '$templateName' created"
+
+                    # Grant auto-enrollment permissions to Domain Computers
+                    Start-Sleep -Seconds 2
+                    $templateDN = "CN=$templateName,$templateContainer"
+                    $template = Get-ADObject -Identity $templateDN -Properties nTSecurityDescriptor -ErrorAction Stop
+                    $acl = $template.nTSecurityDescriptor
+
+                    $domainComputersGroup = Get-ADGroup -Identity "Domain Computers" -ErrorAction Stop
+                    $domainComputersSID = New-Object System.Security.Principal.SecurityIdentifier($domainComputersGroup.SID)
+
+                    # GUIDs for certificate permissions
+                    $enrollGuid = New-Object Guid "0e10c968-78fb-11d2-90d4-00c04f79dc55"
+                    $autoEnrollGuid = New-Object Guid "a05b8cc2-17bc-4802-a710-e7c15ab866a2"
+
+                    # Add Read permission
+                    $readRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $domainComputersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::GenericRead,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    # Add Enroll permission
+                    $enrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $domainComputersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        $enrollGuid,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    # Add Autoenroll permission
+                    $autoEnrollRule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+                        $domainComputersSID,
+                        [System.DirectoryServices.ActiveDirectoryRights]::ExtendedRight,
+                        [System.Security.AccessControl.AccessControlType]::Allow,
+                        $autoEnrollGuid,
+                        [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+                    )
+
+                    $acl.AddAccessRule($readRule)
+                    $acl.AddAccessRule($enrollRule)
+                    $acl.AddAccessRule($autoEnrollRule)
+
+                    Set-ADObject -Identity $templateDN -Replace @{nTSecurityDescriptor=$acl} -ErrorAction Stop
+                    "[DCInstall] Permissions granted to Domain Computers for auto-enrollment"
+
+                    # Publish template to CA
+                    $caName = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc\Configuration" -ErrorAction SilentlyContinue).PSChildName | Select-Object -First 1
+                    if ($caName) {
+                        "[DCInstall] Publishing template to CA: $caName"
+                        certutil -SetCATemplates +$templateName 2>&1 | Out-Null
+                        if ($LASTEXITCODE -eq 0) {
+                            "[DCInstall] Template published to CA successfully"
+                            Restart-Service -Name CertSvc -Force
+                            "[DCInstall] Certificate Services restarted"
+                        }
+                    }
+
                 } else {
-                    throw "Could not determine CA configuration"
+                    "[DCInstall] WARNING: Computer template not found"
                 }
-            }
-
-            "[DCInstall] Running: certreq -submit -config `"$caConfig`" $reqFile $cerFile"
-            $submitOutput = certreq -submit -config "$caConfig" $reqFile $cerFile 2>&1
-            "[DCInstall] certreq -submit result: $submitOutput"
-            if (-not (Test-Path $cerFile)) {
-                throw "Failed to submit certificate request - certificate file not created"
-            }
-            "[DCInstall] Submitted certificate request to CA"
-
-            # Accept and install certificate
-            "[DCInstall] Running: certreq -accept $cerFile"
-            $acceptOutput = certreq -accept $cerFile 2>&1
-            "[DCInstall] certreq -accept result: $acceptOutput"
-            "[DCInstall] Certificate issued for ADCS server"
-
-            # Export certificate with private key to PFX
-            # First, find the certificate we just installed
-            $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object {$_.Subject -eq "CN=$adcsServerFqdn"} | Select-Object -First 1
-
-            if ($cert) {
-                "[DCInstall] Found certificate, thumbprint: $($cert.Thumbprint)"
-
-                # Export to PFX
-                $pfxSecurePassword = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
-                Export-PfxCertificate -Cert $cert -FilePath $pfxFile -Password $pfxSecurePassword -Force
-                "[DCInstall] Exported certificate to PFX: $pfxFile"
-
-                # Store PFX in Parameter Store for ADCS server to retrieve
-                try {
-                    "[DCInstall] Importing AWS.Tools.SimpleSystemsManagement module..."
-                    Import-Module AWS.Tools.SimpleSystemsManagement -ErrorAction Stop
-                    "[DCInstall] AWS module imported successfully"
-
-                    # Read PFX file as base64
-                    "[DCInstall] Reading PFX file: $pfxFile"
-                    $pfxBytes = [System.IO.File]::ReadAllBytes($pfxFile)
-                    $pfxBase64 = [System.Convert]::ToBase64String($pfxBytes)
-                    "[DCInstall] PFX file encoded to base64 ($($pfxBytes.Length) bytes)"
-
-                    # Store in Parameter Store
-                    $paramNamePfx = "/${name}/adcs/webserver-cert-pfx"
-                    $paramNamePassword = "/${name}/adcs/webserver-cert-password"
-
-                    "[DCInstall] Storing PFX in Parameter Store: $paramNamePfx"
-                    Write-SSMParameter -Name $paramNamePfx -Value $pfxBase64 -Type "String" -Overwrite $true
-                    "[DCInstall] PFX stored successfully"
-
-                    "[DCInstall] Storing password in Parameter Store: $paramNamePassword"
-                    Write-SSMParameter -Name $paramNamePassword -Value $pfxPassword -Type "SecureString" -Overwrite $true
-                    "[DCInstall] Password stored successfully"
-
-                    "[DCInstall] Web Server certificate stored in Parameter Store"
-                } catch {
-                    "[DCInstall] WARNING: Failed to store certificate in Parameter Store: $_"
-                    "[DCInstall] Exception details: $($_.Exception.Message)"
-                }
-
-                # Clean up certificate from current user store (not needed on DC)
-                Remove-Item -Path "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
-
-                # Clean up temporary files
-                Remove-Item $infFile, $reqFile, $cerFile, $pfxFile -Force -ErrorAction SilentlyContinue
-                "[DCInstall] Cleaned up temporary certificate files"
             } else {
-                "[DCInstall] WARNING: Could not find issued certificate for $adcsServerFqdn"
+                "[DCInstall] Auto-enrollment template '$templateName' already exists"
             }
-
-            "[DCInstall] Web Server certificate creation completed"
 
         } catch {
-            "[DCInstall] WARNING: Failed to create Web Server certificate for ADCS: $_"
+            "[DCInstall] ERROR creating auto-enrollment template: $_"
             "[DCInstall] Exception details: $($_.Exception.Message)"
         }
+
+        #--------------------------------------------------------------
+        # Create GPO for Certificate Auto-Enrollment
+        #--------------------------------------------------------------
+        "[DCInstall] Creating GPO for certificate auto-enrollment..."
+
+        try {
+            Import-Module GroupPolicy -ErrorAction Stop
+
+            $gpoName = "Certificate Auto-Enrollment"
+            $existingGPO = Get-GPO -Name $gpoName -ErrorAction SilentlyContinue
+
+            if (-not $existingGPO) {
+                "[DCInstall] Creating GPO: $gpoName"
+                $gpo = New-GPO -Name $gpoName -ErrorAction Stop
+
+                # Configure Computer Configuration\Windows Settings\Security Settings\Public Key Policies\Certificate Services Client - Auto-Enrollment
+                # Registry settings for auto-enrollment
+                $regPath = "Software\Policies\Microsoft\Cryptography\AutoEnrollment"
+
+                # Enable auto-enrollment and renew expired certificates, update pending certificates, remove revoked certificates
+                Set-GPRegistryValue -Name $gpoName -Key "HKLM\$regPath" -ValueName "AEPolicy" -Type DWord -Value 7 -ErrorAction Stop
+                "[DCInstall] Configured auto-enrollment policy in GPO"
+
+                # Link GPO to domain root
+                $domain = Get-ADDomain -ErrorAction Stop
+                $domainDN = $domain.DistinguishedName
+                New-GPLink -Name $gpoName -Target $domainDN -LinkEnabled Yes -ErrorAction Stop
+                "[DCInstall] GPO linked to domain: $domainDN"
+
+                "[DCInstall] Certificate auto-enrollment GPO created and configured"
+            } else {
+                "[DCInstall] Auto-enrollment GPO already exists"
+            }
+
+        } catch {
+            "[DCInstall] ERROR creating auto-enrollment GPO: $_"
+            "[DCInstall] Exception details: $($_.Exception.Message)"
+        }
+
+        # Note: Manual certificate creation removed - ADCS server will auto-enroll
+        "[DCInstall] ADCS server will auto-enroll for web server certificate via GPO"
+        "[DCInstall] Auto-enrollment will occur when ADCS server applies group policy"
 
         "Certificates and GPOs updated" | Out-File "C:\sdm.done"
         "[DCInstall] Domain Controller setup completed successfully! $(Get-Date)"

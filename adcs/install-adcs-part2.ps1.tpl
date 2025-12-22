@@ -489,48 +489,58 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 8: Retrieve and Install Web Server Certificate
+# Step 8: Trigger and Wait for Auto-Enrolled Certificate
 #--------------------------------------------------------------
-Write-Log "Step 8: Retrieving Web Server certificate from Parameter Store..."
+Write-Log "Step 8: Triggering certificate auto-enrollment..."
 
 try {
-    # Wait a bit for DC to finish creating the certificate
-    Write-Log "Waiting for DC to create certificate (30 seconds)..."
-    Start-Sleep -Seconds 30
+    # Force Group Policy update to apply auto-enrollment GPO immediately
+    Write-Log "Forcing Group Policy update to trigger auto-enrollment..."
+    gpupdate /force /target:computer 2>&1 | Out-Null
+    Write-Log "Group Policy update completed"
 
-    # Retrieve PFX and password from Parameter Store
-    $pfxParamName = "/${domain_name}/adcs/webserver-cert-pfx"
-    $passwordParamName = "/${domain_name}/adcs/webserver-cert-password"
+    # Trigger certificate auto-enrollment manually
+    Write-Log "Triggering certificate auto-enrollment..."
+    certreq -autoenroll -machine 2>&1 | Out-Null
+    Write-Log "Auto-enrollment triggered"
 
-    Write-Log "Retrieving certificate from $pfxParamName..."
-    $pfxBase64 = Get-SSMParameter -Name $pfxParamName -ErrorAction Stop | Select-Object -ExpandProperty Value
+    # Wait for certificate to appear (auto-enrollment may take a moment)
+    Write-Log "Waiting for auto-enrolled certificate to appear..."
+    $maxWaitSeconds = 120
+    $waitedSeconds = 0
+    $cert = $null
 
-    Write-Log "Retrieving certificate password from $passwordParamName..."
-    $pfxPassword = Get-SSMParameter -Name $passwordParamName -WithDecryption $true -ErrorAction Stop | Select-Object -ExpandProperty Value
+    while ($waitedSeconds -lt $maxWaitSeconds -and -not $cert) {
+        Start-Sleep -Seconds 10
+        $waitedSeconds += 10
 
-    # Decode base64 PFX to bytes
-    $pfxBytes = [System.Convert]::FromBase64String($pfxBase64)
-    Write-Log "Decoded PFX data ($(($pfxBytes.Length)) bytes)"
+        # Look for certificate in LocalMachine\My store with Server Authentication EKU
+        $cert = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue | Where-Object {
+            $_.Subject -like "CN=$computerName.$domainFQDN*" -and
+            $_.EnhancedKeyUsageList.ObjectId -contains "1.3.6.1.5.5.7.3.1" -and
+            $_.Issuer -like "*$domainName*"
+        } | Select-Object -First 1
 
-    # Save to temporary file
-    $pfxTempFile = "C:\Windows\Temp\webserver-cert.pfx"
-    [System.IO.File]::WriteAllBytes($pfxTempFile, $pfxBytes)
-    Write-Log "Saved PFX to $pfxTempFile"
+        if ($cert) {
+            Write-Log "Auto-enrolled certificate found after $waitedSeconds seconds"
+            Write-Log "  Subject: $($cert.Subject)"
+            Write-Log "  Thumbprint: $($cert.Thumbprint)"
+            Write-Log "  Expires: $($cert.NotAfter)"
+            Write-Log "  Issuer: $($cert.Issuer)"
+            break
+        } else {
+            Write-Log "Waiting for certificate... ($waitedSeconds seconds elapsed)"
+        }
+    }
 
-    # Import into LocalMachine\My store
-    $securePassword = ConvertTo-SecureString -String $pfxPassword -AsPlainText -Force
-    $importedCert = Import-PfxCertificate -FilePath $pfxTempFile -CertStoreLocation Cert:\LocalMachine\My -Password $securePassword -ErrorAction Stop
-
-    Write-Log "Web Server certificate imported successfully"
-    Write-Log "  Subject: $($importedCert.Subject)"
-    Write-Log "  Thumbprint: $($importedCert.Thumbprint)"
-    Write-Log "  Expires: $($importedCert.NotAfter)"
-
-    # Clean up temp file
-    Remove-Item -Path $pfxTempFile -Force -ErrorAction SilentlyContinue
+    if (-not $cert) {
+        Write-Log "WARNING: Auto-enrolled certificate did not appear within $maxWaitSeconds seconds"
+        Write-Log "Certificate may enroll later via background auto-enrollment"
+        Write-Log "NDES may not have HTTPS enabled immediately"
+    }
 
 } catch {
-    Write-Log "ERROR retrieving/installing Web Server certificate: $_"
+    Write-Log "ERROR during certificate auto-enrollment: $_"
     Write-Log "NDES will not have HTTPS enabled"
 }
 
