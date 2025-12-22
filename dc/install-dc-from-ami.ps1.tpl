@@ -763,6 +763,106 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
             "[DCInstall] ERROR creating certificate template: $_"
         }
 
+        #--------------------------------------------------------------
+        # Create Web Server Certificate for ADCS Server
+        #--------------------------------------------------------------
+        "[DCInstall] Creating Web Server certificate for ADCS server..."
+
+        try {
+            # Create certificate request INF for ADCS server
+            $adcsServerFqdn = "${name}-adcs.${name}.local"
+            $certReqInf = @"
+[Version]
+Signature="`$Windows NT`$"
+
+[NewRequest]
+Subject = "CN=$adcsServerFqdn"
+KeySpec = 1
+KeyLength = 2048
+Exportable = TRUE
+MachineKeySet = FALSE
+SMIME = FALSE
+PrivateKeyArchive = FALSE
+UserProtected = FALSE
+UseExistingKeySet = FALSE
+ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
+ProviderType = 12
+RequestType = PKCS10
+KeyUsage = 0xa0
+
+[EnhancedKeyUsageExtension]
+OID=1.3.6.1.5.5.7.3.1
+
+[RequestAttributes]
+CertificateTemplate=Web Server
+"@
+
+            $infFile = "C:\ADCSWebServerCert.inf"
+            $reqFile = "C:\ADCSWebServerCert.req"
+            $cerFile = "C:\ADCSWebServerCert.cer"
+            $pfxFile = "C:\ADCSWebServerCert.pfx"
+            $pfxPassword = "${password}"
+
+            Set-Content -Path $infFile -Value $certReqInf
+            "[DCInstall] Created certificate request INF for ADCS server"
+
+            # Generate certificate request
+            certreq -new $infFile $reqFile
+            "[DCInstall] Generated certificate request for ADCS server"
+
+            # Submit to local CA
+            certreq -submit -config "." $reqFile $cerFile
+            "[DCInstall] Submitted certificate request to CA"
+
+            # Accept and install certificate
+            certreq -accept $cerFile
+            "[DCInstall] Certificate issued for ADCS server"
+
+            # Export certificate with private key to PFX
+            # First, find the certificate we just installed
+            $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object {$_.Subject -eq "CN=$adcsServerFqdn"} | Select-Object -First 1
+
+            if ($cert) {
+                "[DCInstall] Found certificate, thumbprint: $($cert.Thumbprint)"
+
+                # Export to PFX
+                $pfxSecurePassword = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
+                Export-PfxCertificate -Cert $cert -FilePath $pfxFile -Password $pfxSecurePassword -Force
+                "[DCInstall] Exported certificate to PFX: $pfxFile"
+
+                # Store PFX in Parameter Store for ADCS server to retrieve
+                try {
+                    Import-Module AWS.Tools.SimpleSystemsManagement -ErrorAction Stop
+
+                    # Read PFX file as base64
+                    $pfxBytes = [System.IO.File]::ReadAllBytes($pfxFile)
+                    $pfxBase64 = [System.Convert]::ToBase64String($pfxBytes)
+
+                    # Store in Parameter Store
+                    $paramNamePfx = "/${name}/adcs/webserver-cert-pfx"
+                    $paramNamePassword = "/${name}/adcs/webserver-cert-password"
+
+                    Write-SSMParameter -Name $paramNamePfx -Value $pfxBase64 -Type "String" -Overwrite $true
+                    Write-SSMParameter -Name $paramNamePassword -Value $pfxPassword -Type "SecureString" -Overwrite $true
+
+                    "[DCInstall] Web Server certificate stored in Parameter Store"
+                } catch {
+                    "[DCInstall] WARNING: Failed to store certificate in Parameter Store: $_"
+                }
+
+                # Clean up certificate from current user store (not needed on DC)
+                Remove-Item -Path "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+
+                # Clean up temporary files
+                Remove-Item $infFile, $reqFile, $cerFile, $pfxFile -Force -ErrorAction SilentlyContinue
+            } else {
+                "[DCInstall] WARNING: Could not find issued certificate"
+            }
+
+        } catch {
+            "[DCInstall] WARNING: Failed to create Web Server certificate for ADCS: $_"
+        }
+
         "Certificates and GPOs updated" | Out-File "C:\sdm.done"
         "[DCInstall] Domain Controller setup completed successfully! $(Get-Date)"
     } else {

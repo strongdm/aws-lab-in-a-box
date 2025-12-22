@@ -431,58 +431,6 @@ try {
 
     Write-Log "NDES configured successfully"
 
-    # Request Web Server certificate for HTTPS (must run as domain admin)
-    Write-Log "Requesting Web Server certificate for $computerName.$domainFQDN..."
-
-    try {
-        `$certReqInf = @`"
-[Version]
-Signature=```"`$Windows NT```"`"
-
-[NewRequest]
-Subject = `"CN=$computerName.$domainFQDN`"
-KeySpec = 1
-KeyLength = 2048
-Exportable = TRUE
-MachineKeySet = TRUE
-SMIME = FALSE
-PrivateKeyArchive = FALSE
-UserProtected = FALSE
-UseExistingKeySet = FALSE
-ProviderName = `"Microsoft RSA SChannel Cryptographic Provider`"
-ProviderType = 12
-RequestType = PKCS10
-KeyUsage = 0xa0
-
-[EnhancedKeyUsageExtension]
-OID=1.3.6.1.5.5.7.3.1
-
-[RequestAttributes]
-CertificateTemplate=Web Server
-`"@
-
-        `$infFile = `"C:\WebServerCert.inf`"
-        `$reqFile = `"C:\WebServerCert.req`"
-        `$cerFile = `"C:\WebServerCert.cer`"
-
-        Set-Content -Path `$infFile -Value `$certReqInf
-        Write-Log `"Created certificate request INF file`"
-
-        certreq -new `$infFile `$reqFile | Out-Null
-        Write-Log `"Generated certificate request`"
-
-        certreq -submit -config `".`" `$reqFile `$cerFile | Out-Null
-        Write-Log `"Submitted certificate request to local CA`"
-
-        certreq -accept `$cerFile | Out-Null
-        Write-Log `"Web Server certificate installed successfully`"
-
-        Remove-Item `$infFile, `$reqFile, `$cerFile -Force -ErrorAction SilentlyContinue
-
-    } catch {
-        Write-Log `"WARNING: Failed to request Web Server certificate: `$_`"
-    }
-
     exit 0
 } catch {
     Write-Log "ERROR configuring NDES: `$_"
@@ -541,9 +489,55 @@ CertificateTemplate=Web Server
 }
 
 #--------------------------------------------------------------
-# Step 8: Configure NDES Registry Settings
+# Step 8: Retrieve and Install Web Server Certificate
 #--------------------------------------------------------------
-Write-Log "Step 8: Configuring NDES registry for StrongDM template..."
+Write-Log "Step 8: Retrieving Web Server certificate from Parameter Store..."
+
+try {
+    # Wait a bit for DC to finish creating the certificate
+    Write-Log "Waiting for DC to create certificate (30 seconds)..."
+    Start-Sleep -Seconds 30
+
+    # Retrieve PFX and password from Parameter Store
+    $pfxParamName = "/${domain_name}/adcs/webserver-cert-pfx"
+    $passwordParamName = "/${domain_name}/adcs/webserver-cert-password"
+
+    Write-Log "Retrieving certificate from $pfxParamName..."
+    $pfxBase64 = Get-SSMParameter -Name $pfxParamName -ErrorAction Stop | Select-Object -ExpandProperty Value
+
+    Write-Log "Retrieving certificate password from $passwordParamName..."
+    $pfxPassword = Get-SSMParameter -Name $passwordParamName -WithDecryption $true -ErrorAction Stop | Select-Object -ExpandProperty Value
+
+    # Decode base64 PFX to bytes
+    $pfxBytes = [System.Convert]::FromBase64String($pfxBase64)
+    Write-Log "Decoded PFX data ($(($pfxBytes.Length)) bytes)"
+
+    # Save to temporary file
+    $pfxTempFile = "C:\Windows\Temp\webserver-cert.pfx"
+    [System.IO.File]::WriteAllBytes($pfxTempFile, $pfxBytes)
+    Write-Log "Saved PFX to $pfxTempFile"
+
+    # Import into LocalMachine\My store
+    $securePassword = ConvertTo-SecureString -String $pfxPassword -AsPlainText -Force
+    $importedCert = Import-PfxCertificate -FilePath $pfxTempFile -CertStoreLocation Cert:\LocalMachine\My -Password $securePassword -ErrorAction Stop
+
+    Write-Log "Web Server certificate imported successfully"
+    Write-Log "  Subject: $($importedCert.Subject)"
+    Write-Log "  Thumbprint: $($importedCert.Thumbprint)"
+    Write-Log "  Expires: $($importedCert.NotAfter)"
+
+    # Clean up temp file
+    Remove-Item -Path $pfxTempFile -Force -ErrorAction SilentlyContinue
+
+} catch {
+    Write-Log "ERROR retrieving/installing Web Server certificate: $_"
+    Write-Log "NDES will not have HTTPS enabled"
+}
+
+#--------------------------------------------------------------
+# Step 9: Configure NDES Registry Settings
+#--------------------------------------------------------------
+Write-Log "Step 9: Configuring NDES registry for StrongDM template..."
 
 try {
     $mscepPath = "HKLM:\Software\Microsoft\Cryptography\MSCEP"
@@ -571,9 +565,9 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 9: Enable IIS Basic Authentication
+# Step 10: Enable IIS Basic Authentication
 #--------------------------------------------------------------
-Write-Log "Step 9: Enabling IIS Basic Authentication for NDES..."
+Write-Log "Step 10: Enabling IIS Basic Authentication for NDES..."
 
 try {
     Import-Module WebAdministration
@@ -598,42 +592,31 @@ try {
     }
 
     # Configure HTTPS binding with machine certificate
-    # Note: Web Server certificate is requested by the NDES configuration script (runs as domain admin)
+    # Note: Web Server certificate is created on DC and retrieved from Parameter Store in Step 8
     Write-Log "Configuring HTTPS binding for NDES..."
-    Write-Log "Waiting for Web Server certificate to be available..."
+    Write-Log "Looking for Web Server certificate..."
 
-    # Wait for the certificate request to complete (from scheduled task)
-    # The NDES config task should have requested and installed the certificate
-    $maxRetries = 6
-    $retryCount = 0
-    $machineCert = $null
+    # Find the certificate that was imported in Step 8
+    $machineCert = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue | Where-Object {
+        $_.Subject -eq "CN=$computerName.$domainFQDN" -and
+        $_.EnhancedKeyUsageList.ObjectId -contains "1.3.6.1.5.5.7.3.1"
+    } | Select-Object -First 1
 
-    while ($retryCount -lt $maxRetries -and -not $machineCert) {
-        Start-Sleep -Seconds 5
+    if (-not $machineCert) {
+        Write-Log "Web Server certificate not found in LocalMachine\My store"
 
-        $machineCert = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue | Where-Object {
-            $_.Subject -like "CN=$computerName.$domainFQDN*" -and
-            $_.EnhancedKeyUsageList.ObjectId -contains "1.3.6.1.5.5.7.3.1"
-        } | Select-Object -First 1
-
-        $retryCount++
-
-        if (-not $machineCert) {
-            Write-Log "Web Server certificate not found yet (attempt $retryCount/$maxRetries)"
-
-            # List available certificates for debugging
-            $allCerts = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue
-            if ($allCerts) {
-                Write-Log "Available certificates in LocalMachine\My:"
-                foreach ($cert in $allCerts) {
-                    Write-Log "  Subject: $($cert.Subject), Issuer: $($cert.Issuer)"
-                    if ($cert.EnhancedKeyUsageList) {
-                        Write-Log "    EKU: $($cert.EnhancedKeyUsageList.FriendlyName -join ', ')"
-                    }
+        # List available certificates for debugging
+        $allCerts = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue
+        if ($allCerts) {
+            Write-Log "Available certificates in LocalMachine\My:"
+            foreach ($cert in $allCerts) {
+                Write-Log "  Subject: $($cert.Subject), Issuer: $($cert.Issuer)"
+                if ($cert.EnhancedKeyUsageList) {
+                    Write-Log "    EKU: $($cert.EnhancedKeyUsageList.FriendlyName -join ', ')"
                 }
-            } else {
-                Write-Log "No certificates found in LocalMachine\My store"
             }
+        } else {
+            Write-Log "No certificates found in LocalMachine\My store"
         }
     }
 
