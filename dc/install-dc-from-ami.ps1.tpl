@@ -1041,12 +1041,15 @@ if (-not $published) {
         schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
 
         # Create task as SYSTEM to run once, starting in 5 minutes
+        $startTime = (Get-Date).AddMinutes(5).ToString("HH:mm")
+        $startDate = (Get-Date).ToString("MM/dd/yyyy")
+
         $result = schtasks.exe /create `
             /tn $taskName `
             /tr $taskAction `
             /sc once `
-            /st (Get-Date).AddMinutes(5).ToString("HH:mm") `
-            /sd (Get-Date).ToString("MM/dd/yyyy") `
+            /st $startTime `
+            /sd $startDate `
             /ru "SYSTEM" `
             /rl HIGHEST `
             /f 2>&1
