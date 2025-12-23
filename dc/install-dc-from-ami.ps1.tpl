@@ -962,6 +962,103 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         "[DCInstall] ADCS server will auto-enroll for web server certificate via GPO"
         "[DCInstall] Auto-enrollment will occur when ADCS server applies group policy"
 
+        #--------------------------------------------------------------
+        # Create background task to publish templates to SubCA
+        #--------------------------------------------------------------
+        "[DCInstall] Creating background task to publish templates to SubCA..."
+
+        $subCAPublishScript = @'
+# Wait for SubCA to come online and publish templates
+$logFile = "C:\SubCATemplatePublish.log"
+$subCAFQDN = "europa-adcs.europa.local"
+$subCAName = "Europa-SubCA"
+$maxWaitMinutes = 30
+$checkIntervalSeconds = 60
+
+function Write-Log {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp - $Message" | Out-File -FilePath $logFile -Append
+}
+
+Write-Log "=== SubCA Template Publishing Task Started ==="
+Write-Log "Waiting for SubCA to come online: $subCAFQDN\$subCAName"
+
+$waited = 0
+$published = $false
+
+while ($waited -lt ($maxWaitMinutes * 60) -and -not $published) {
+    Start-Sleep -Seconds $checkIntervalSeconds
+    $waited += $checkIntervalSeconds
+
+    Write-Log "Checking SubCA availability... (waited $waited seconds)"
+
+    # Test if SubCA is responding
+    $test = certutil -config "$subCAFQDN\$subCAName" -ping 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Log "SubCA is online! Attempting to publish templates..."
+
+        # Publish StrongDM template
+        Write-Log "Publishing StrongDM template..."
+        $result1 = certutil -config "$subCAFQDN\$subCAName" -SetCATemplates +StrongDM 2>&1
+        Write-Log "StrongDM result: $result1"
+
+        # Publish ADCS-WebServer template
+        Write-Log "Publishing ADCS-WebServer template..."
+        $result2 = certutil -config "$subCAFQDN\$subCAName" -SetCATemplates +ADCS-WebServer 2>&1
+        Write-Log "ADCS-WebServer result: $result2"
+
+        # Verify
+        $verify = certutil -config "$subCAFQDN\$subCAName" -CAInfo templates 2>&1 | Out-String
+        if ($verify -like "*StrongDM*" -and $verify -like "*ADCS-WebServer*") {
+            Write-Log "SUCCESS: Both templates published to SubCA"
+            $published = $true
+        } else {
+            Write-Log "WARNING: Templates may not be published correctly"
+            Write-Log "Template list: $verify"
+        }
+    } else {
+        Write-Log "SubCA not yet available (exit code: $LASTEXITCODE)"
+    }
+}
+
+if (-not $published) {
+    Write-Log "ERROR: Failed to publish templates within $maxWaitMinutes minutes"
+} else {
+    Write-Log "=== SubCA Template Publishing Task Completed Successfully ==="
+}
+'@
+
+        $subCAScriptPath = "C:\PublishSubCATemplates.ps1"
+        $subCAPublishScript | Out-File -FilePath $subCAScriptPath -Force
+
+        # Create scheduled task to run in background
+        $taskName = "PublishSubCATemplates"
+        $taskAction = "PowerShell.exe -ExecutionPolicy Bypass -File `"$subCAScriptPath`""
+
+        # Delete existing task if present
+        schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
+
+        # Create task as SYSTEM to run once, starting in 5 minutes
+        $result = schtasks.exe /create `
+            /tn $taskName `
+            /tr $taskAction `
+            /sc once `
+            /st (Get-Date).AddMinutes(5).ToString("HH:mm") `
+            /sd (Get-Date).ToString("MM/dd/yyyy") `
+            /ru "SYSTEM" `
+            /rl HIGHEST `
+            /f 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            "[DCInstall] SubCA template publishing task created (will run in 5 minutes)"
+            "[DCInstall] Task will wait up to 30 minutes for SubCA to come online"
+            "[DCInstall] Check C:\SubCATemplatePublish.log for progress"
+        } else {
+            "[DCInstall] WARNING: Failed to create SubCA publishing task: $result"
+        }
+
         "Certificates and GPOs updated" | Out-File "C:\sdm.done"
         "[DCInstall] Domain Controller setup completed successfully! $(Get-Date)"
     } else {

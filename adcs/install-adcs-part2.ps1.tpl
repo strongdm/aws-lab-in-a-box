@@ -565,9 +565,40 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 9: Configure NDES Registry Settings
+# Step 9: Wait for Templates to be Published by DC
 #--------------------------------------------------------------
-Write-Log "Step 9: Configuring NDES registry for StrongDM template..."
+Write-Log "Step 9: Waiting for certificate templates to be published by DC..."
+Write-Log "NOTE: DC publishes templates to SubCA via background task"
+Write-Log "Templates should appear within 5-30 minutes after DC provisioning"
+
+# Note: The DC creates a scheduled task that waits for this SubCA to come online
+# and then publishes StrongDM and ADCS-WebServer templates to it.
+# We don't need to do anything here - just log that we're waiting.
+
+try {
+    # Check if templates are already available
+    Import-Module ADCSAdministration -ErrorAction SilentlyContinue
+    $templates = Get-CATemplate -ErrorAction SilentlyContinue
+
+    if ($templates | Where-Object { $_.Name -eq "StrongDM" }) {
+        Write-Log "StrongDM template is already published"
+    } else {
+        Write-Log "StrongDM template not yet published (will be published by DC)"
+    }
+
+    if ($templates | Where-Object { $_.Name -eq "ADCS-WebServer" }) {
+        Write-Log "ADCS-WebServer template is already published"
+    } else {
+        Write-Log "ADCS-WebServer template not yet published (will be published by DC)"
+    }
+} catch {
+    Write-Log "Could not check template status: $_"
+}
+
+#--------------------------------------------------------------
+# Step 10: Configure NDES Registry Settings
+#--------------------------------------------------------------
+Write-Log "Step 10: Configuring NDES registry for StrongDM template..."
 
 try {
     $mscepPath = "HKLM:\Software\Microsoft\Cryptography\MSCEP"
@@ -595,14 +626,14 @@ try {
 }
 
 #--------------------------------------------------------------
-# Step 10: Enable IIS Basic Authentication
+# Step 11: Enable IIS Basic Authentication
 #--------------------------------------------------------------
-Write-Log "Step 10: Enabling IIS Basic Authentication for NDES..."
+Write-Log "Step 11: Enabling IIS Basic Authentication for NDES..."
 
 try {
     Import-Module WebAdministration
 
-    # Enable Basic Auth for CERTSRV application
+    # Enable Basic Auth for CERTSRV mscep application
     Set-WebConfigurationProperty `
         -Filter "/system.webServer/security/authentication/basicAuthentication" `
         -Name "enabled" `
@@ -612,6 +643,17 @@ try {
         -ErrorAction Stop
 
     Write-Log "Basic Authentication enabled for NDES SCEP endpoint"
+
+    # Enable Basic Auth for CERTSRV mscep_admin application
+    Set-WebConfigurationProperty `
+        -Filter "/system.webServer/security/authentication/basicAuthentication" `
+        -Name "enabled" `
+        -Value "True" `
+        -PSPath "IIS:\" `
+        -Location "Default Web Site/CertSrv/mscep_admin" `
+        -ErrorAction Stop
+
+    Write-Log "Basic Authentication enabled for NDES SCEP admin endpoint"
 
     # Set Application Pool to Integrated mode (recommended)
     $appPool = Get-Item "IIS:\AppPools\SCEP"
@@ -626,11 +668,17 @@ try {
     Write-Log "Configuring HTTPS binding for NDES..."
     Write-Log "Looking for Web Server certificate..."
 
-    # Find the certificate that was imported in Step 8
+    # Find the certificate that was auto-enrolled in Step 8
+    # Note: Auto-enrolled certificates may have Subject in SAN instead of Subject field
     $machineCert = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue | Where-Object {
-        $_.Subject -eq "CN=$computerName.$domainFQDN" -and
-        $_.EnhancedKeyUsageList.ObjectId -contains "1.3.6.1.5.5.7.3.1"
-    } | Select-Object -First 1
+        $_.EnhancedKeyUsageList.ObjectId -contains "1.3.6.1.5.5.7.3.1" -and
+        $_.HasPrivateKey -eq $true -and
+        (
+            $_.Subject -like "CN=$computerName.$domainFQDN*" -or
+            $_.Subject -eq "CN=$computerName.$domainFQDN" -or
+            ($_.DnsNameList.Unicode -contains "$computerName.$domainFQDN")
+        )
+    } | Sort-Object NotAfter -Descending | Select-Object -First 1
 
     if (-not $machineCert) {
         Write-Log "Web Server certificate not found in LocalMachine\My store"
@@ -660,9 +708,10 @@ try {
             New-WebBinding -Name "Default Web Site" `
                 -Protocol https `
                 -Port 443 `
+                -HostHeader "$computerName.$domainFQDN" `
                 -SslFlags 0 `
                 -ErrorAction Stop
-            Write-Log "HTTPS binding created on port 443"
+            Write-Log "HTTPS binding created on port 443 with host header $computerName.$domainFQDN"
         } else {
             Write-Log "HTTPS binding already exists"
         }
