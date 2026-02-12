@@ -278,6 +278,80 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         }
 
         #--------------------------------------------------------------
+        # Scoped Service Account Creation
+        #--------------------------------------------------------------
+        # These accounts replace Domain Admin for specific roles:
+        # svc-ndes: NDES IIS AppPool identity (certificate enrollment)
+        # svc-sdm-relay: Relay-to-NDES authentication (SDM_ADCS_USER/PW)
+        # svc-pwd-rotation: AD credential rotation (secret engine binddn)
+        "[DCInstall] Creating scoped service accounts"
+
+        # NDES service account
+        $svcNdesPass = ConvertTo-SecureString "${svc_ndes_password}" -AsPlainText -Force
+        $ndesParams = @{
+            SamAccountName       = "svc-ndes"
+            Name                 = "NDES Service Account"
+            UserPrincipalName    = "svc-ndes@${name}.local"
+            AccountPassword      = $svcNdesPass
+            Enabled              = $true
+            PasswordNeverExpires = $true
+            CannotChangePassword = $true
+            Description          = "Scoped service account for NDES certificate enrollment"
+        }
+        New-ADUser @ndesParams
+        "[DCInstall] Created svc-ndes service account"
+
+        # Relay-to-NDES client account
+        $svcRelayPass = ConvertTo-SecureString "${svc_relay_password}" -AsPlainText -Force
+        $relayParams = @{
+            SamAccountName       = "svc-sdm-relay"
+            Name                 = "SDM Relay NDES Client"
+            UserPrincipalName    = "svc-sdm-relay@${name}.local"
+            AccountPassword      = $svcRelayPass
+            Enabled              = $true
+            PasswordNeverExpires = $true
+            CannotChangePassword = $true
+            Description          = "Scoped account for StrongDM relay NDES SCEP requests"
+        }
+        New-ADUser @relayParams
+        "[DCInstall] Created svc-sdm-relay service account"
+
+        # Credential rotation account
+        $svcRotationPass = ConvertTo-SecureString "${svc_rotation_password}" -AsPlainText -Force
+        $rotationParams = @{
+            SamAccountName       = "svc-pwd-rotation"
+            Name                 = "Password Rotation Service"
+            UserPrincipalName    = "svc-pwd-rotation@${name}.local"
+            AccountPassword      = $svcRotationPass
+            Enabled              = $true
+            PasswordNeverExpires = $true
+            CannotChangePassword = $true
+            Description          = "Scoped account for AD credential rotation (Reset Password only)"
+        }
+        New-ADUser @rotationParams
+        "[DCInstall] Created svc-pwd-rotation service account"
+
+        # Delegate Reset Password permission on CN=Users for the rotation account
+        "[DCInstall] Delegating Reset Password permission to svc-pwd-rotation"
+        $rotationUser = Get-ADUser "svc-pwd-rotation"
+        $usersContainer = "CN=Users,DC=${name},DC=local"
+        $resetPwdGuid = [GUID]"00299570-246d-11d0-a768-00aa006e0529"
+        $userObjectGuid = [GUID]"bf967aba-0de6-11d0-a285-00aa003049e2"
+
+        $acl = Get-Acl "AD:$usersContainer"
+        $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+            $rotationUser.SID,
+            "ExtendedRight",
+            "Allow",
+            $resetPwdGuid,
+            "Descendant",
+            $userObjectGuid
+        )
+        $acl.AddAccessRule($ace)
+        Set-Acl "AD:$usersContainer" $acl
+        "[DCInstall] Reset Password delegated to svc-pwd-rotation on $usersContainer"
+
+        #--------------------------------------------------------------
         # Download and Create Domain Users from S3
         #--------------------------------------------------------------
         %{ if has_domain_users }
