@@ -45,8 +45,19 @@ output "certificate_template_name" {
   value       = var.certificate_template_name
 }
 
+output "sdm_adcs_user" {
+  description = "Username for SDM_ADCS_USER gateway configuration (scoped relay account)"
+  value       = "svc-sdm-relay@${local.domain_fqdn}"
+}
+
+output "sdm_adcs_password" {
+  description = "Password for SDM_ADCS_PW gateway configuration (scoped relay account)"
+  value       = var.svc_relay_password
+  sensitive   = true
+}
+
 output "domain_admin_user" {
-  description = "Domain administrator username for SDM_ADCS_USER"
+  description = "DEPRECATED: Use sdm_adcs_user instead. Domain administrator username."
   value       = "${var.domain_admin_user}@${local.domain_fqdn}"
 }
 

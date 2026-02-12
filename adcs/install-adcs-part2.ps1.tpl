@@ -389,16 +389,18 @@ try {
 
     Write-Log "NDES and IIS features installed successfully"
 
-    # Add domain admin to IIS_IUSRS group (group is created when IIS is installed)
-    Write-Log "Adding domain admin to IIS_IUSRS group..."
-    $addUserResult = net localgroup IIS_IUSRS /add "$domainFQDN\$domainAdmin" 2>&1
+    # Add NDES service account to IIS_IUSRS group (required for NDES AppPool identity)
+    # Uses svc-ndes when available, falls back to domain admin for backward compatibility
+    $ndesAccount = if ("${svc_ndes_password}" -ne "") { "svc-ndes" } else { $domainAdmin }
+    Write-Log "Adding $ndesAccount to IIS_IUSRS group..."
+    $addUserResult = net localgroup IIS_IUSRS /add "$domainFQDN\$ndesAccount" 2>&1
 
     if ($LASTEXITCODE -eq 0) {
-        Write-Log "Added $domainFQDN\$domainAdmin to IIS_IUSRS group"
+        Write-Log "Added $domainFQDN\$ndesAccount to IIS_IUSRS group"
     } elseif ($addUserResult -match "already a member") {
-        Write-Log "Domain admin already member of IIS_IUSRS group"
+        Write-Log "$ndesAccount already member of IIS_IUSRS group"
     } else {
-        Write-Log "WARNING: Failed to add domain admin to IIS_IUSRS group: $addUserResult"
+        Write-Log "WARNING: Failed to add $ndesAccount to IIS_IUSRS group: $addUserResult"
         Write-Log "NDES configuration may fail without this membership"
     }
 
@@ -426,13 +428,18 @@ function Write-Log {
 
 try {
     Write-Log "Running NDES configuration with domain admin credentials..."
-    `$securePassword = ConvertTo-SecureString '$domainPassword' -AsPlainText -Force
+
+    # Use svc-ndes when available, fall back to domain admin for backward compatibility
+    `$ndesAccount = if ('${svc_ndes_password}' -ne '') { 'svc-ndes' } else { '$domainAdmin' }
+    `$ndesPassword = if ('${svc_ndes_password}' -ne '') { '${svc_ndes_password}' } else { '$domainPassword' }
+    `$secureNdesPassword = ConvertTo-SecureString `$ndesPassword -AsPlainText -Force
+    Write-Log "NDES service account: `$ndesAccount"
 
     # NOTE: When ADCS CA is on the same server as NDES, do NOT specify -CAConfig
     # NDES will automatically use the local CA
     Install-AdcsNetworkDeviceEnrollmentService ``
-        -ServiceAccountName '$domainFQDN\$domainAdmin' ``
-        -ServiceAccountPassword `$securePassword ``
+        -ServiceAccountName '$domainFQDN\`$ndesAccount' ``
+        -ServiceAccountPassword `$secureNdesPassword ``
         -RAName 'StrongDM NDES RA' ``
         -RAEmail 'ndes@$domainFQDN' ``
         -RACompany 'StrongDM' ``
@@ -846,8 +853,8 @@ Write-Log "Certificate Template: $templateName"
 Write-Log "CA Common Name: $caCommonName"
 Write-Log ""
 Write-Log "For StrongDM Gateway configuration:"
-Write-Log "  SDM_ADCS_USER=${domain_admin_user}@${domain_fqdn}"
-Write-Log "  SDM_ADCS_PW=<use domain admin password>"
+Write-Log "  SDM_ADCS_USER=${svc_relay_username}@${domain_fqdn}"
+Write-Log "  SDM_ADCS_PW=<use svc-sdm-relay password from DC module output>"
 Write-Log ""
 
 # Remove scheduled task
