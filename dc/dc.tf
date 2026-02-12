@@ -62,13 +62,16 @@ locals {
 
   # Render the full PowerShell installation script using the selected template
   install_dc_rendered = templatefile(local.install_script_template, {
-    name              = var.name
-    password          = random_password.admin_password.result
-    rdpca_base64      = base64encode(var.rdpca) # Base64 encode to avoid parsing issues
-    domain_users_hash = local.domain_users_hash # Hash ensures user_data changes trigger recreation
-    s3_bucket         = aws_s3_bucket.domain_users.id
-    s3_key            = "domain-users.json"
-    has_domain_users  = var.domain_users != null
+    name                  = var.name
+    password              = random_password.admin_password.result
+    rdpca_base64          = base64encode(var.rdpca) # Base64 encode to avoid parsing issues
+    domain_users_hash     = local.domain_users_hash # Hash ensures user_data changes trigger recreation
+    s3_bucket             = aws_s3_bucket.domain_users.id
+    s3_key                = "domain-users.json"
+    has_domain_users      = var.domain_users != null
+    svc_ndes_password     = random_password.svc_ndes_password.result
+    svc_relay_password    = random_password.svc_relay_password.result
+    svc_rotation_password = random_password.svc_rotation_password.result
   })
 
   # Minimal bootstrap script that downloads and executes the full script from S3

@@ -84,3 +84,34 @@ output "ssm_domain_admin_sid_parameter" {
   description = "AWS Systems Manager Parameter Store path containing the Domain Administrator SID"
   value       = "/${var.name}/dc/domain-admin-sid"
 }
+
+# Scoped service account credentials for NDES service identity
+output "svc_ndes_password" {
+  description = "Password for the svc-ndes service account (NDES IIS AppPool identity)"
+  value       = random_password.svc_ndes_password.result
+  sensitive   = true
+}
+
+# Scoped service account credentials for relay-to-NDES authentication
+output "svc_relay_username" {
+  description = "Username for the relay-to-NDES client service account"
+  value       = "svc-sdm-relay"
+}
+
+output "svc_relay_password" {
+  description = "Password for the svc-sdm-relay service account (SDM_ADCS_USER)"
+  value       = random_password.svc_relay_password.result
+  sensitive   = true
+}
+
+# Scoped service account credentials for AD credential rotation (secret engine binddn)
+output "svc_rotation_username" {
+  description = "Username for the AD credential rotation service account"
+  value       = "svc-pwd-rotation"
+}
+
+output "svc_rotation_password" {
+  description = "Password for the svc-pwd-rotation service account (secret engine binddn)"
+  value       = random_password.svc_rotation_password.result
+  sensitive   = true
+}

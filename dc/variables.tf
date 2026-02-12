@@ -60,6 +60,32 @@ resource "random_password" "admin_password" {
   min_lower   = 1     # Ensure at least one lowercase letter
 }
 
+# Service account passwords for scoped service accounts
+# These replace Domain Admin usage for NDES, relay-to-NDES, and credential rotation
+resource "random_password" "svc_ndes_password" {
+  length      = 24
+  special     = false
+  min_numeric = 1
+  min_upper   = 1
+  min_lower   = 1
+}
+
+resource "random_password" "svc_relay_password" {
+  length      = 24
+  special     = false
+  min_numeric = 1
+  min_upper   = 1
+  min_lower   = 1
+}
+
+resource "random_password" "svc_rotation_password" {
+  length      = 24
+  special     = false
+  min_numeric = 1
+  min_upper   = 1
+  min_lower   = 1
+}
+
 variable "domain_users" {
   description = "Set of map of users to be created in the Directory"
   type = set(object({
