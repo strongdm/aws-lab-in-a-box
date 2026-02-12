@@ -95,6 +95,21 @@ variable "ndes_service_account" {
   default     = "NDESService"
 }
 
+# Scoped service account passwords (from DC module outputs)
+variable "svc_ndes_password" {
+  description = "Password for the svc-ndes service account (created by DC module, used as NDES IIS AppPool identity)"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "svc_relay_password" {
+  description = "Password for the svc-sdm-relay service account (created by DC module, used for SDM_ADCS_USER/PW)"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
 # Local variables for module operation
 locals {
   # CA common name defaults to "<Name>-SubCA"
@@ -129,6 +144,9 @@ locals {
     certificate_template_name = var.certificate_template_name
     ndes_service_account      = var.ndes_service_account
     s3_bucket                 = aws_s3_bucket.adcs_scripts.id
+    svc_ndes_password         = var.svc_ndes_password != null ? var.svc_ndes_password : ""
+    svc_relay_password        = var.svc_relay_password != null ? var.svc_relay_password : ""
+    svc_relay_username        = "svc-sdm-relay"
   }
 
   # Render Part 1: Domain join script
