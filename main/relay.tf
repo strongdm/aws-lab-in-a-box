@@ -34,7 +34,7 @@ resource "sdm_node" "relay" {
 # Launch the EC2 instance that will run the StrongDM relay
 resource "aws_instance" "relay" {
   ami                         = data.aws_ami.ubuntu.id      # Ubuntu AMI defined in amis.tf
-  instance_type               = "t2.micro"                  # Small instance suitable for relay functions
+  instance_type               = "t3.micro"                  # Small instance suitable for relay functions
   user_data_replace_on_change = true                        # Ensure user data changes trigger instance replacement
   key_name                    = aws_key_pair.relay.key_name # Key pair for SSH access
 

@@ -15,7 +15,7 @@
 
 # Create a Windows Server instance configured to join a domain and serve as an RDP target
 resource "aws_instance" "windowstarget" {
-  instance_type = "t2.medium" # Medium instance with sufficient resources for Windows Server
+  instance_type = "t3.medium" # Medium instance with sufficient resources for Windows Server
   ami           = var.ami     # Windows Server AMI ID passed from variables
 
   user_data_replace_on_change = true # Ensure user data changes trigger instance replacement

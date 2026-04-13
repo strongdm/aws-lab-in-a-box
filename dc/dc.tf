@@ -14,7 +14,7 @@
 
 # Create a Windows Server instance to be configured as a domain controller
 resource "aws_instance" "dc" {
-  instance_type = "t2.medium"
+  instance_type = "t3.medium"
   ami           = var.ami
 
   user_data_replace_on_change = true

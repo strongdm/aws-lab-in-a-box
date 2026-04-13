@@ -15,7 +15,7 @@
 # Create an EC2 instance configured as an SSH target
 resource "aws_instance" "ssh-target" {
   ami                         = var.ami
-  instance_type               = "t2.micro"
+  instance_type               = "t3.micro"
   subnet_id                   = var.subnet_id
   user_data_replace_on_change = true
   vpc_security_group_ids      = [var.sg]

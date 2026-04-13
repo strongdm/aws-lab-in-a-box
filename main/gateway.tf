@@ -161,7 +161,7 @@ resource "aws_key_pair" "gateway" {
 # Launch the EC2 instance that will run the StrongDM gateway
 resource "aws_instance" "gateway" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t2.micro"
+  instance_type               = "t3.micro"
   subnet_id                   = coalesce(var.gateway_subnet, one(module.network[*].gateway_subnet))
   user_data_replace_on_change = true
   iam_instance_profile        = aws_iam_instance_profile.gw_instance_profile.name

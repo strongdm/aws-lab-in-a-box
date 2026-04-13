@@ -13,7 +13,7 @@
 
 # Create a subnet group for the DocumentDB cluster from provided subnets
 resource "aws_docdb_subnet_group" "docdb_subnet_group" {
-  name       = "${var.name}-docdb-subnet-group"
+  name       = lower("${var.name}-docdb-subnet-group")
   subnet_ids = var.subnet_id
 
   tags = local.thistagset
@@ -21,7 +21,7 @@ resource "aws_docdb_subnet_group" "docdb_subnet_group" {
 
 # DocumentDB Cluster - Contains the storage and metadata for the database
 resource "aws_docdb_cluster" "docdb_cluster" {
-  cluster_identifier      = "${var.name}-docdb-cluster"
+  cluster_identifier      = lower("${var.name}-docdb-cluster")
   engine                  = "docdb"                     # DocumentDB uses the docdb engine type
   master_username         = var.username                # Admin username for the cluster
   master_password         = local.actual_password       # Admin password (auto-generated if not provided)
@@ -39,7 +39,7 @@ resource "aws_docdb_cluster" "docdb_cluster" {
 # Creates the specified number of instances based on replica_instance_count
 resource "aws_docdb_cluster_instance" "docdb_instances" {
   count              = var.replica_instance_count
-  identifier         = "${var.name}-docdb-instance-${count.index}"
+  identifier         = lower("${var.name}-docdb-instance-${count.index}")
   cluster_identifier = aws_docdb_cluster.docdb_cluster.id
   instance_class     = var.instance_class # Instance size/performance tier
 
