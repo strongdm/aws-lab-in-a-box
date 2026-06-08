@@ -20,21 +20,23 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0.0" # Requires AWS provider v5+ for all features
+      version = "~> 6.0" # AWS provider v6 (Enhanced Region Support, OpsWorks/SimpleDB/Worklink removed)
     }
     sdm = {
       source  = "strongdm/sdm"
-      version = ">=14.20.0" # Requires StrongDM provider v14.13.0+ for all features
+      version = "~> 17.0" # StrongDM provider v17 (MCP Gateway OAuth, MS SQL Kerberos identity aliases)
     }
     external = {
-      source = "hashicorp/external" # Used for external data sources and commands
+      source  = "hashicorp/external"
+      version = "~> 2.4"
     }
     env = {
-      source = "tcarreira/env" # Used for accessing environment variables
+      source  = "tcarreira/env"
+      version = "~> 0.2"
     }
   }
 
-  required_version = ">= 1.1.0" # Requires Terraform 1.1.0+
+  required_version = ">= 1.5.0"
 }
 
 # Get current AWS region information

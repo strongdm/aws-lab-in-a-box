@@ -27,7 +27,7 @@ resource "sdm_resource" "awsrocli" {
   count = var.create_aws_ro == false ? 0 : 1
   aws_instance_profile {
     name     = "${var.name}-aws-cli-ro"                    # Resource name in StrongDM
-    region   = data.aws_region.current.name                # AWS region for the profile
+    region   = data.aws_region.current.region              # AWS region for the profile
     role_arn = one(module.awsro[*].ec2_read_only_role_arn) # ARN of the read-only role
 
     tags = merge(var.tagset, {
@@ -44,7 +44,7 @@ resource "sdm_resource" "awsroconsole" {
   count = var.create_aws_ro == false ? 0 : 1
   aws_console {
     name      = "aws-console-ro"                            # Resource name in StrongDM
-    region    = data.aws_region.current.name                # AWS region for the console
+    region    = data.aws_region.current.region              # AWS region for the console
     role_arn  = one(module.awsro[*].ec2_read_only_role_arn) # ARN of the read-only role
     subdomain = "aws${var.name}"                            # Subdomain for console access
 

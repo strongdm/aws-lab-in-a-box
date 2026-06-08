@@ -16,9 +16,9 @@ terraform {
 
     sdm = {
       source  = "strongdm/sdm"
-      version = ">=14.20.0" # Requires StrongDM provider v14.20.0+ for managed secrets features
+      version = "~> 17.0" # StrongDM provider v17 for managed secrets features
     }
   }
 
-  required_version = ">= 1.1.0" # Requires Terraform 1.1.0+ for modern provider features
+  required_version = ">= 1.5.0"
 }

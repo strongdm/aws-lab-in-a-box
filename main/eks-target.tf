@@ -35,8 +35,8 @@ resource "sdm_resource" "eks" {
     endpoint              = module.eks[0].endpoint                 # Kubernetes API endpoint
     name                  = "${var.name}-eks-cluster"              # Resource name in StrongDM
     cluster_name          = module.eks[0].name                     # EKS cluster name
-    region                = data.aws_region.current.name           # AWS region
-    tags                  = merge(module.eks[0].thistagset, {
+    region                = data.aws_region.current.region         # AWS region
+    tags = merge(module.eks[0].thistagset, {
       sdm__cloud_id = module.eks[0].cluster_id
     })
   }
