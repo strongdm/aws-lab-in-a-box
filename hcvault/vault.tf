@@ -126,9 +126,9 @@ resource "aws_instance" "hcvault" {
   ami                    = var.ami
   instance_type          = "t3.small"
   vpc_security_group_ids = [var.sg]
-  subnet_id             = var.subnet_id
-  iam_instance_profile  = aws_iam_instance_profile.vault.name
-  
+  subnet_id              = var.subnet_id
+  iam_instance_profile   = aws_iam_instance_profile.vault.name
+
   user_data_replace_on_change = true
 
   user_data_base64 = base64encode(templatefile("${path.module}/vault-provision.tpl", {
@@ -136,7 +136,7 @@ resource "aws_instance" "hcvault" {
     target_user                = var.target_user
     vault_version              = var.vault_version
     kms_key_id                 = aws_kms_key.vault_unseal.key_id
-    region                     = data.aws_region.current.name
+    region                     = data.aws_region.current.region
     relay_instance_profile_arn = var.relay_instance_profile_arn
   }))
 

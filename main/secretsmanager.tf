@@ -16,6 +16,6 @@
 resource "sdm_secret_store" "awssecretsmanager" {
   aws {
     name   = "${var.name}awssecretsmanager" # Unique name for the secret store
-    region = data.aws_region.current.name   # Use current AWS region for optimal performance
+    region = data.aws_region.current.region # Use current AWS region for optimal performance
   }
 }
