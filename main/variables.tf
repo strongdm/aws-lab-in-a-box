@@ -193,3 +193,11 @@ variable "demo_approver_account_ids" {
   type        = list(string)
   default     = []
 }
+
+#---------- Health Check Configuration ----------#
+
+variable "run_healthchecks" {
+  description = "Ask StrongDM to re-check every registered resource after deployment. Requires the sdm CLI on PATH"
+  type        = bool
+  default     = false
+}

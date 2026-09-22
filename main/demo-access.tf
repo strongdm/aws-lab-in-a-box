@@ -274,7 +274,13 @@ resource "sdm_workflow" "auto_grant_standard" {
     }
   ])
 
-  access_request_fixed_duration = "1h"
+  access_request_fixed_duration = "1h0m0s" # Canonical form the API stores, so the value converges
+
+  # Linking an automatic approval flow makes the API set auto_grant itself. The
+  # argument is deprecated, so let the server own the value instead of fighting it.
+  lifecycle {
+    ignore_changes = [auto_grant]
+  }
 }
 
 # Approval-required workflow for sensitive resources (databases, Windows)
@@ -294,7 +300,7 @@ resource "sdm_workflow" "approval_required_sensitive" {
     }
   ])
 
-  access_request_max_duration = "8h"
+  access_request_max_duration = "8h0m0s" # Canonical form the API stores, so the value converges
 }
 
 #--------------------------------------------------------------
