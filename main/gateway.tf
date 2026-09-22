@@ -176,7 +176,7 @@ resource "aws_instance" "gateway" {
     create_hcvault  = "false" # The gateway never needs to know about Vault
     vault_version   = ""
     vault_url       = ""
-    aws_region      = data.aws_region.current.name
+    aws_region      = data.aws_region.current.region
 
   })
 

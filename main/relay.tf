@@ -48,7 +48,7 @@ resource "aws_instance" "relay" {
     sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
     create_hcvault  = var.create_hcvault
     vault_url       = var.create_hcvault ? one(module.hcvault[*].vault_url) : ""
-    aws_region      = data.aws_region.current.name
+    aws_region      = data.aws_region.current.region
     vault_version   = var.create_hcvault ? var.vault_version : ""
   })
 
