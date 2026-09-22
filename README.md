@@ -101,7 +101,7 @@ This is important if you're using the Windows CA target on versions under 2.0, a
 - `create_windows_target`: Create a Windows RDP target.
 - `create_adcs`: Create a standalone ADCS/NDES server (see [ADCS/NDES Considerations](#adcsndes-considerations)).
 - `create_aws_ro`: Create a role that can be assumed by the gateway to access AWS.
-- `create_demo_access`: Create example roles, Cedar policies, and approval workflows for the lab (see [Demo Access](#demo-access)).
+- `create_lab_access`: Create worked examples of roles, Cedar policies and approval workflows for the lab (see [Lab Access](#lab-access)).
 - `run_healthchecks`: Ask StrongDM to re-check every registered resource after deployment, so targets do not sit unhealthy until the next scheduled check. Requires the `sdm` CLI on PATH.
 
 ### General Configuration
@@ -109,7 +109,7 @@ This is important if you're using the Windows CA target on versions under 2.0, a
 - `name`: An arbitrary string that will be added to all resource names.
 - `secretkey`: Key for the tag used to filter secrets manager secrets.
 - `secretvalue`: Value for the tag used to filter secrets manager secrets.
-- `demo_approver_account_ids`: StrongDM account IDs added to the demo approver group.
+- `lab_approver_account_ids`: StrongDM account IDs added to the lab approver group.
 - `dc_ready_timeout`: Seconds to wait for the domain controller before failing the Windows target (default 1800).
 
 You can reference the [terraform.tfvars.example](main/terraform.tfvars.example) file in the main module for example configurations.
@@ -131,10 +131,11 @@ If you're running this in Windows, you may have to set your execution policy acc
 Set-ExecutionPolicy Bypass
 ```
 
-## Demo Access
+## Lab Access
 
-Setting `create_demo_access = true` adds a set of example access management objects to
-show role-based access, Cedar policies, and approval workflows against the lab's targets:
+Setting `create_lab_access = true` adds worked examples of StrongDM access management, so a
+customer can see role-based access, Cedar policies and approval workflows running against
+their own lab's targets:
 
 - **Roles** — `<name>-DBA-Team`, `<name>-DevOps-Team`, `<name>-Windows-Admin`,
   `<name>-Cloud-Access`, and `<name>-Full-Access`. Each uses tag-based access rules that
@@ -149,11 +150,11 @@ show role-based access, Cedar policies, and approval workflows against the lab's
 - **Workflows** — a standard workflow that auto-grants one hour of access, and a
   sensitive workflow (databases and the Windows target) that requires approval from the
   `<name>-Approvers` group. The group is created empty, so add members with
-  `demo_approver_account_ids` or in the StrongDM UI before demonstrating an approval.
+  `lab_approver_account_ids` or in the StrongDM UI before demonstrating an approval.
 
 Because the business-hours policy denies connections for every account, keep in mind that
 it also applies to you: outside the window, connections to this lab's targets are denied
-while `create_demo_access` is enabled.
+while `create_lab_access` is enabled.
 
 ## Windows Target Considerations
 

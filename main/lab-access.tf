@@ -1,10 +1,10 @@
 #--------------------------------------------------------------
-# Demo Access Configuration
+# Lab Access Configuration
 #
-# This file creates example StrongDM access management resources
-# for demonstrating role-based access control, policies, and
-# approval workflows. All resources are gated behind the
-# create_demo_access feature flag.
+# This file creates worked examples of StrongDM access management
+# for a customer evaluating role-based access control, policies and
+# approval workflows against their own lab. All resources are gated behind the
+# create_lab_access feature flag.
 #
 # Components:
 # - Roles with tag-based access rules
@@ -18,23 +18,23 @@
 #--------------------------------------------------------------
 
 locals {
-  # Every lab resource carries the operator's tagset. The demo matches on the
+  # Every lab resource carries the operator's tagset. The examples match on the
   # environment tag, so it needs a value even when the tagset omits the key.
-  demo_environment = lookup(var.tagset, "environment", "Lab")
+  lab_environment = lookup(var.tagset, "environment", "Lab")
 
   # StrongDM Name tags applied by the target modules. Access rules match tags
   # exactly, so the names are listed rather than pattern matched. Names of
   # targets that were not deployed simply match nothing.
-  demo_database_targets = [
+  lab_database_targets = [
     "sdm-${var.name}-postgresql",
     "sdm-${var.name}-documentdb",
   ]
 
-  # Databases plus the Windows target: the resources the demo routes through the
+  # Databases plus the Windows target: the resources routed through the
   # approval workflow.
-  demo_sensitive_targets = concat(local.demo_database_targets, ["sdm-${var.name}-windows-target"])
+  lab_sensitive_targets = concat(local.lab_database_targets, ["sdm-${var.name}-windows-target"])
 
-  demo_cloud_targets = [
+  lab_cloud_targets = [
     "sdm-${var.name}-aws-cli-ro",
     "sdm-${var.name}-aws-console-ro",
     "sdm-${var.name}-s3-cli-ro",
@@ -56,11 +56,11 @@ locals {
 
 # DBA Team - Access to all database resources (PostgreSQL, DocumentDB)
 resource "sdm_role" "dba_team" {
-  count = var.create_demo_access == false ? 0 : 1
+  count = var.create_lab_access == false ? 0 : 1
   name  = "${var.name}-DBA-Team"
 
   access_rules = jsonencode([
-    for target in local.demo_database_targets : {
+    for target in local.lab_database_targets : {
       tags = {
         class = "target"
         Name  = target
@@ -71,7 +71,7 @@ resource "sdm_role" "dba_team" {
 
 # DevOps Team - Access to Linux servers and Kubernetes clusters
 resource "sdm_role" "devops_team" {
-  count = var.create_demo_access == false ? 0 : 1
+  count = var.create_lab_access == false ? 0 : 1
   name  = "${var.name}-DevOps-Team"
 
   access_rules = jsonencode([
@@ -92,7 +92,7 @@ resource "sdm_role" "devops_team" {
 
 # Windows Admin - Access to Windows/RDP targets and domain controller
 resource "sdm_role" "windows_admin" {
-  count = var.create_demo_access == false ? 0 : 1
+  count = var.create_lab_access == false ? 0 : 1
   name  = "${var.name}-Windows-Admin"
 
   access_rules = jsonencode([
@@ -113,11 +113,11 @@ resource "sdm_role" "windows_admin" {
 
 # Cloud Access - Access to the AWS CLI and console profiles (ReadOnly, S3, Glue)
 resource "sdm_role" "cloud_access" {
-  count = var.create_demo_access == false ? 0 : 1
+  count = var.create_lab_access == false ? 0 : 1
   name  = "${var.name}-Cloud-Access"
 
   access_rules = jsonencode([
-    for target in local.demo_cloud_targets : {
+    for target in local.lab_cloud_targets : {
       tags = {
         class = "target"
         Name  = target
@@ -126,15 +126,15 @@ resource "sdm_role" "cloud_access" {
   ])
 }
 
-# Full Access - Access to all targets in this environment (for demo/admin)
+# Full Access - Access to every target in this environment
 resource "sdm_role" "full_access" {
-  count = var.create_demo_access == false ? 0 : 1
+  count = var.create_lab_access == false ? 0 : 1
   name  = "${var.name}-Full-Access"
 
   access_rules = jsonencode([
     {
       tags = {
-        environment = local.demo_environment
+        environment = local.lab_environment
       }
     }
   ])
@@ -158,7 +158,7 @@ resource "sdm_role" "full_access" {
 # itself an authorizing permit - it deliberately repeats the DBA role and
 # database targets rather than matching more broadly.
 resource "sdm_policy" "require_db_justification" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   name        = "${var.name}-require-db-justification"
   description = "Require the ${var.name}-DBA-Team role to provide a justification when connecting to this lab's database targets"
 
@@ -183,7 +183,7 @@ resource "sdm_policy" "require_db_justification" {
 # dayOfWeek runs Sunday = 1 through Saturday = 7. A resource without the Name
 # or environment tag is left unaffected rather than denied.
 resource "sdm_policy" "business_hours_only" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   name        = "${var.name}-business-hours-only"
   description = "Demonstrate time-based access control by denying connections to this lab's resources outside 08:00-18:00 UTC on weekdays"
 
@@ -199,7 +199,7 @@ resource "sdm_policy" "business_hours_only" {
       resource.sdm.hasTag("Name") &&
       resource.sdm.getTag("Name") like "sdm-${var.name}-*" &&
       resource.sdm.hasTag("environment") &&
-      resource.sdm.getTag("environment") == "${local.demo_environment}" &&
+      resource.sdm.getTag("environment") == "${local.lab_environment}" &&
       context has utcNow &&
       (context.utcNow.dayOfWeek < 2 ||
        context.utcNow.dayOfWeek > 6 ||
@@ -219,16 +219,16 @@ resource "sdm_policy" "business_hours_only" {
 #--------------------------------------------------------------
 
 # Approver group - holds the accounts allowed to approve sensitive requests.
-# The group is created empty; populate it with demo_approver_account_ids or in
+# The group is created empty; populate it with lab_approver_account_ids or in
 # the StrongDM UI, otherwise requests routed to it can never be approved.
 resource "sdm_group" "approvers" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   name        = "${var.name}-Approvers"
   description = "Approves access requests for the sensitive resources in the ${var.name} lab"
 }
 
 resource "sdm_account_group" "approvers" {
-  for_each = var.create_demo_access == false ? toset([]) : toset(var.demo_approver_account_ids)
+  for_each = var.create_lab_access == false ? toset([]) : toset(var.lab_approver_account_ids)
 
   group_id   = one(sdm_group.approvers[*].id)
   account_id = each.value
@@ -237,7 +237,7 @@ resource "sdm_account_group" "approvers" {
 # Automatic approval flow for standard resources. The workflow's own auto_grant
 # argument is deprecated, so the grant is expressed as an approval flow instead.
 resource "sdm_approval_workflow" "auto_approve" {
-  count         = var.create_demo_access == false ? 0 : 1
+  count         = var.create_lab_access == false ? 0 : 1
   name          = "${var.name}-Auto-Approve"
   approval_mode = "automatic"
   description   = "Automatically approves access requests for standard resources"
@@ -245,7 +245,7 @@ resource "sdm_approval_workflow" "auto_approve" {
 
 # Manual approval flow for sensitive resources requiring sign-off
 resource "sdm_approval_workflow" "manager_approval" {
-  count         = var.create_demo_access == false ? 0 : 1
+  count         = var.create_lab_access == false ? 0 : 1
   name          = "${var.name}-Manager-Approval"
   approval_mode = "manual"
   description   = "Requires manual approval for sensitive resource access"
@@ -259,7 +259,7 @@ resource "sdm_approval_workflow" "manager_approval" {
 
 # Auto-grant workflow for standard resources (Linux, Kubernetes, cloud profiles)
 resource "sdm_workflow" "auto_grant_standard" {
-  count            = var.create_demo_access == false ? 0 : 1
+  count            = var.create_lab_access == false ? 0 : 1
   name             = "${var.name}-Auto-Grant-Standard"
   enabled          = true
   approval_flow_id = one(sdm_approval_workflow.auto_approve[*].id)
@@ -269,7 +269,7 @@ resource "sdm_workflow" "auto_grant_standard" {
     {
       tags = {
         class       = "target"
-        environment = local.demo_environment
+        environment = local.lab_environment
       }
     }
   ])
@@ -285,14 +285,14 @@ resource "sdm_workflow" "auto_grant_standard" {
 
 # Approval-required workflow for sensitive resources (databases, Windows)
 resource "sdm_workflow" "approval_required_sensitive" {
-  count            = var.create_demo_access == false ? 0 : 1
+  count            = var.create_lab_access == false ? 0 : 1
   name             = "${var.name}-Approval-Required-Sensitive"
   enabled          = true
   approval_flow_id = one(sdm_approval_workflow.manager_approval[*].id)
   description      = "Requires approval for access to sensitive database and Windows resources"
 
   access_rules = jsonencode([
-    for target in local.demo_sensitive_targets : {
+    for target in local.lab_sensitive_targets : {
       tags = {
         class = "target"
         Name  = target
@@ -312,41 +312,41 @@ resource "sdm_workflow" "approval_required_sensitive" {
 
 # DBA Team can use the sensitive approval workflow
 resource "sdm_workflow_role" "dba_sensitive" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   workflow_id = one(sdm_workflow.approval_required_sensitive[*].id)
   role_id     = one(sdm_role.dba_team[*].id)
 }
 
 # Windows Admin covers the Windows target, so it uses the sensitive workflow
 resource "sdm_workflow_role" "windows_admin_sensitive" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   workflow_id = one(sdm_workflow.approval_required_sensitive[*].id)
   role_id     = one(sdm_role.windows_admin[*].id)
 }
 
 # DevOps Team can use the auto-grant workflow
 resource "sdm_workflow_role" "devops_standard" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   workflow_id = one(sdm_workflow.auto_grant_standard[*].id)
   role_id     = one(sdm_role.devops_team[*].id)
 }
 
 # Cloud Access only covers standard cloud profiles, so it auto-grants
 resource "sdm_workflow_role" "cloud_access_standard" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   workflow_id = one(sdm_workflow.auto_grant_standard[*].id)
   role_id     = one(sdm_role.cloud_access[*].id)
 }
 
 # Full Access can use both workflows
 resource "sdm_workflow_role" "full_access_standard" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   workflow_id = one(sdm_workflow.auto_grant_standard[*].id)
   role_id     = one(sdm_role.full_access[*].id)
 }
 
 resource "sdm_workflow_role" "full_access_sensitive" {
-  count       = var.create_demo_access == false ? 0 : 1
+  count       = var.create_lab_access == false ? 0 : 1
   workflow_id = one(sdm_workflow.approval_required_sensitive[*].id)
   role_id     = one(sdm_role.full_access[*].id)
 }

@@ -188,14 +188,14 @@ variable "vault_version" {
 
 #---------- Demo Access Configuration ----------#
 
-variable "create_demo_access" {
-  description = "Create example StrongDM roles, Cedar policies, and approval workflows for this lab"
+variable "create_lab_access" {
+  description = "Create worked examples of StrongDM roles, Cedar policies and approval workflows for this lab"
   type        = bool
   default     = false
 }
 
-variable "demo_approver_account_ids" {
-  description = "StrongDM account IDs (a-...) to add to the demo approver group. While empty, requests routed to the approval workflow cannot be approved"
+variable "lab_approver_account_ids" {
+  description = "StrongDM account IDs (a-...) to add to the lab approver group. While empty, requests routed to the approval workflow cannot be approved"
   type        = list(string)
   default     = []
 }
