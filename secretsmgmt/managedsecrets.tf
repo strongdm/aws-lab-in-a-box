@@ -7,29 +7,10 @@
 # can be rotated on demand or on a schedule.
 #
 # Components:
-# - Encrypted secret values for domain user credentials
+# - Base64 encoded JSON credentials set directly on each managed secret
 # - Managed secrets integrated with Active Directory secret engine
 # - User-specific tagging for access control and organization
 #--------------------------------------------------------------
-
-//resource "sdm_managed_secret" "domain_users" {
-//  for_each = { 
-//    for index, user in data.external.managed_users:
-//    user.result.SamAccountName => user
-//    }
-//   kv {
-//    value = "foo"
-//   }
-//   active_directory {
-//    user_dn = "CN=Phillip J Fry, OU=Users"
-//   }
-//
-//
-//  name   = each.value.result.SamAccountName
-//  value = base64decode(each.value.result.user_dn)
-//  secret_engine_id = sdm_secret_engine.ad.id
-//  #policy = jsonencode({"passwordPolicy" = "Length: 20, Digits: 5, Symbols: 2, AllowRepeat: false, ExcludedCharacters: \"\", ExcludeUpperCase: false"})
-//}
 
 # Create a managed secret for the domain user that enables password rotation.
 # The credential is set directly as base64 encoded JSON; the separate encrypted
@@ -44,18 +25,3 @@ resource "sdm_managed_secret" "secret" {
     username = var.domain_name != null ? "${var.SamAccountName}@${var.domain_name}.local" : var.SamAccountName # Store the username with domain suffix if domain_name provided
   }))
 }
-//data "external" "managed_users" {
-//    program = ["/bin/bash", "${path.module}/userencrypt.sh"]
-//    for_each = { for index, user in var.domain_users:
-//      user.SamAccountName => user
-//    }
-//    query = {
-//        SamAccountName = each.value.SamAccountName
-//        GivenName      = each.value.GivenName
-//        Surname        = each.value.Surname
-//        Domain         = var.name
-//        Key            = local_file.public_key.filename
-//    }
-
-
-//}
