@@ -24,7 +24,7 @@ terraform {
     }
     sdm = {
       source  = "strongdm/sdm"
-      version = "~> 17.0" # StrongDM provider v17 (MCP Gateway OAuth, MS SQL Kerberos identity aliases)
+      version = "~> 18.0" # StrongDM provider v18 (managed secret values set directly on the secret)
     }
     external = {
       source  = "hashicorp/external"

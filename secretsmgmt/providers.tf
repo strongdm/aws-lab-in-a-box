@@ -16,7 +16,7 @@ terraform {
 
     sdm = {
       source  = "strongdm/sdm"
-      version = "~> 17.0" # StrongDM provider v17 for managed secrets features
+      version = "~> 18.0" # StrongDM provider v18 for managed secrets features
     }
   }
 

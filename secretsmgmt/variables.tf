@@ -7,11 +7,6 @@
 # information for user authentication and access control.
 #--------------------------------------------------------------
 
-variable "se_pubkey" {
-  description = "Public Key of the Secret Engine"
-  type        = string
-}
-
 variable "se_id" {
   description = "ID of the secret engine"
   type        = string

@@ -20,7 +20,6 @@ module "secretsmgmt" {
   for_each = { for index, user in(var.create_managedsecrets && var.create_domain_controller ? (coalesce(var.domain_users, [])) : []) :
     user.SamAccountName => user # Create one instance per domain user
   }
-  se_pubkey      = sdm_secret_engine.ad[0].active_directory[0].public_key                              # Public key from the AD secret engine
   se_id          = sdm_secret_engine.ad[0].id                                                          # Reference to the AD secret engine
   user_dn        = "cn=${each.value.GivenName} ${each.value.Surname},cn=Users,dc=${var.name},dc=local" # LDAP DN for the user
   tags           = each.value.tags                                                                     # User-specific tags for access control
