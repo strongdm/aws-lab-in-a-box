@@ -100,12 +100,14 @@ This is important if you're using the Windows CA target on versions under 2.0, a
 - `create_domain_controller`: Create a Windows domain controller.
 - `create_windows_target`: Create a Windows RDP target.
 - `create_aws_ro`: Create a role that can be assumed by the gateway to access AWS.
- 
+- `create_demo_access`: Create example roles, Cedar policies, and approval workflows for the lab (see [Demo Access](#demo-access)).
+
 ### General Configuration
 - `tagset`: Tags to apply to all resources.
 - `name`: An arbitrary string that will be added to all resource names.
 - `secretkey`: Key for the tag used to filter secrets manager secrets.
 - `secretvalue`: Value for the tag used to filter secrets manager secrets.
+- `demo_approver_account_ids`: StrongDM account IDs added to the demo approver group.
 
 You can reference the [terraform.tfvars.example](main/terraform.tfvars.example) file in the main module for example configurations.
 
@@ -125,6 +127,30 @@ If you're running this in Windows, you may have to set your execution policy acc
 ```powershell
 Set-ExecutionPolicy Bypass
 ```
+
+## Demo Access
+
+Setting `create_demo_access = true` adds a set of example access management objects to
+show role-based access, Cedar policies, and approval workflows against the lab's targets:
+
+- **Roles** — `<name>-DBA-Team`, `<name>-DevOps-Team`, `<name>-Windows-Admin`,
+  `<name>-Cloud-Access`, and `<name>-Full-Access`. Each uses tag-based access rules that
+  match the `Name` tags the target modules apply, so targets are picked up as they are
+  deployed.
+- **Policies** — one requires a justification when the DBA role connects to the
+  PostgreSQL or DocumentDB target; the other denies connections to this lab outside
+  08:00-18:00 UTC, Monday to Friday. Both are scoped to this lab's `Name` tags, so they
+  cannot affect other resources in a shared StrongDM organization. Cedar policies are an
+  additional authorization gate on top of the access grants and only take effect when
+  policy enforcement is enabled for the organization.
+- **Workflows** — a standard workflow that auto-grants one hour of access, and a
+  sensitive workflow (databases and the Windows target) that requires approval from the
+  `<name>-Approvers` group. The group is created empty, so add members with
+  `demo_approver_account_ids` or in the StrongDM UI before demonstrating an approval.
+
+Because the business-hours policy denies connections for every account, keep in mind that
+it also applies to you: outside the window, connections to this lab's targets are denied
+while `create_demo_access` is enabled.
 
 ## Windows Target Considerations
 

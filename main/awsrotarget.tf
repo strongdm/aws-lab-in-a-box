@@ -31,8 +31,9 @@ resource "sdm_resource" "awsrocli" {
     role_arn = one(module.awsro[*].ec2_read_only_role_arn) # ARN of the read-only role
 
     tags = merge(var.tagset, {
-      network       = "Public" # Tagged as public for visibility
-      class         = "target" # Identifies as a target resource
+      network       = "Public"                     # Tagged as public for visibility
+      class         = "target"                     # Identifies as a target resource
+      Name          = "sdm-${var.name}-aws-cli-ro" # Provides a consistent naming convention
       sdm__cloud_id = one(module.awsro[*].ec2_read_only_role_arn)
       }
     )
@@ -49,8 +50,9 @@ resource "sdm_resource" "awsroconsole" {
     subdomain = "aws${var.name}"                            # Subdomain for console access
 
     tags = merge(var.tagset, {
-      network       = "Public" # Tagged as public for visibility
-      class         = "target" # Identifies as a target resource
+      network       = "Public"                         # Tagged as public for visibility
+      class         = "target"                         # Identifies as a target resource
+      Name          = "sdm-${var.name}-aws-console-ro" # Provides a consistent naming convention
       sdm__cloud_id = one(module.awsro[*].ec2_read_only_role_arn)
       }
     )

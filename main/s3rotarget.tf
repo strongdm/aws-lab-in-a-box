@@ -17,6 +17,7 @@ resource "sdm_resource" "awss3rocli" {
     tags = merge(var.tagset, {
       network     = "Public"
       class       = "target"
+      Name        = "sdm-${var.name}-s3-cli-ro" # Provides a consistent naming convention
       service     = "S3"
       permissions = "readonly"
       }
@@ -36,6 +37,7 @@ resource "sdm_resource" "awss3webconsole" {
     tags = merge(var.tagset, {
       network     = "Public"
       class       = "target"
+      Name        = "sdm-${var.name}-s3-console-ro" # Provides a consistent naming convention
       service     = "S3"
       permissions = "readonly"
       }

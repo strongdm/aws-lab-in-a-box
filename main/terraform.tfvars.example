@@ -31,6 +31,12 @@ create_linux_target = true
 #Onboard domain users to be managed by StrongDM
 #create_managedsecrets = true
 
+#Create example roles, Cedar policies, and approval workflows for this lab
+#create_demo_access = true
+
+#Accounts that may approve the demo workflow's sensitive access requests
+#demo_approver_account_ids = ["a-xxxxxxxxxxxxxxxx"]
+
 
 #Allow to access secrets with this key/value
 secretkey = "sdm-owner"

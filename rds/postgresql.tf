@@ -41,8 +41,9 @@ resource "aws_db_subnet_group" "rds_target" {
 # Define a standardized tag set that includes database-specific information
 locals {
   thistagset = merge(var.tagset, {
-    network = "Private" # Indicates this is a private network resource
-    class   = "target"  # Identifies this as a StrongDM target resource
+    network = "Private"                    # Indicates this is a private network resource
+    class   = "target"                     # Identifies this as a StrongDM target resource
+    Name    = "sdm-${var.name}-postgresql" # Provides a consistent naming convention
     }
   )
 }

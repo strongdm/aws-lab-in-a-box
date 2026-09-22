@@ -17,6 +17,7 @@ resource "sdm_resource" "awsgluefullcli" {
     tags = merge(var.tagset, {
       network     = "Public"
       class       = "target"
+      Name        = "sdm-${var.name}-glue-cli-full" # Provides a consistent naming convention
       service     = "Glue"
       permissions = "full"
       }
@@ -36,6 +37,7 @@ resource "sdm_resource" "awsglefullconsole" {
     tags = merge(var.tagset, {
       network     = "Public"
       class       = "target"
+      Name        = "sdm-${var.name}-glue-console-full" # Provides a consistent naming convention
       service     = "Glue"
       permissions = "full"
       }

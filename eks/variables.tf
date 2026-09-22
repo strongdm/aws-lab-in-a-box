@@ -31,7 +31,8 @@ variable "role" {
 locals {
   # Merge provided tags with EKS-specific tags to ensure proper classification
   thistagset = merge(var.tagset, {
-    network = "Private" # Indicates this resource belongs to a private network
-    class   = "target"  # Identifies this resource as a target for StrongDM
+    network = "Private"             # Indicates this resource belongs to a private network
+    class   = "target"              # Identifies this resource as a target for StrongDM
+    Name    = "sdm-${var.name}-eks" # Provides a consistent naming convention
   })
 }
