@@ -14,6 +14,12 @@
 # AWS Provider - Uses the region variable and standard AWS authentication methods
 provider "aws" {
   region = var.region # Region can be specified in terraform.tfvars
+
+  # Account automation stamps these on after creation. Without ignoring them
+  # Terraform strips them on every apply, so each run reports spurious changes.
+  ignore_tags {
+    keys = ["createdAt", "owner"]
+  }
 }
 
 terraform {

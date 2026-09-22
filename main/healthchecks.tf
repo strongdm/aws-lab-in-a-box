@@ -15,37 +15,50 @@
 #--------------------------------------------------------------
 
 locals {
-  # Every StrongDM resource this lab can register. compact() drops the ones
-  # whose feature flag is off, and the health check runs once per remaining ID
-  # because the CLI rejects a name pattern matching more than one resource.
-  healthcheck_resource_ids = compact([
-    sdm_resource.gateway.id,
-    sdm_resource.relay.id,
-    one(sdm_resource.ssh-ca-target[*].id),
-    one(sdm_resource.rds-psql-target[*].id),
-    one(sdm_resource.docdb-target[*].id),
-    one(sdm_resource.eks[*].id),
-    one(sdm_resource.dc[*].id),
-    one(sdm_resource.windows-target[*].id),
-    one(sdm_resource.windows-target-rdp[*].id),
-    one(sdm_resource.ssh-hcvault[*].id),
-    one(sdm_resource.awsrocli[*].id),
-    one(sdm_resource.awsroconsole[*].id),
-    one(sdm_resource.awss3fullcli[*].id),
-    one(sdm_resource.awss3fullconsole[*].id),
-    one(sdm_resource.awss3rocli[*].id),
-    one(sdm_resource.awss3webconsole[*].id),
-    one(sdm_resource.awsgluefullcli[*].id),
-    one(sdm_resource.awsglefullconsole[*].id),
-  ])
+  # Keyed by target name rather than resource ID: for_each keys must be known
+  # at plan time, and an ID is only known after the resource is created. The
+  # feature flags decide which keys exist, so the map stays plan-time complete
+  # while the IDs themselves resolve during apply.
+  healthcheck_resources = merge(
+    {
+      gateway = sdm_resource.gateway.id
+      relay   = sdm_resource.relay.id
+    },
+    var.create_linux_target ? { linux = one(sdm_resource.ssh-ca-target[*].id) } : {},
+    var.create_rds_postgresql ? { postgresql = one(sdm_resource.rds-psql-target[*].id) } : {},
+    var.create_docdb ? { documentdb = one(sdm_resource.docdb-target[*].id) } : {},
+    var.create_eks ? { eks = one(sdm_resource.eks[*].id) } : {},
+    var.create_domain_controller ? { domain_controller = one(sdm_resource.dc[*].id) } : {},
+    var.create_windows_target ? {
+      windows_target = one(sdm_resource.windows-target[*].id)
+      windows_rdp    = one(sdm_resource.windows-target-rdp[*].id)
+    } : {},
+    var.create_hcvault ? { hcvault = one(sdm_resource.ssh-hcvault[*].id) } : {},
+    var.create_aws_ro ? {
+      aws_cli_ro     = one(sdm_resource.awsrocli[*].id)
+      aws_console_ro = one(sdm_resource.awsroconsole[*].id)
+    } : {},
+    var.create_aws_s3full ? {
+      s3_cli_full     = one(sdm_resource.awss3fullcli[*].id)
+      s3_console_full = one(sdm_resource.awss3fullconsole[*].id)
+    } : {},
+    var.create_aws_s3ro ? {
+      s3_cli_ro     = one(sdm_resource.awss3rocli[*].id)
+      s3_console_ro = one(sdm_resource.awss3webconsole[*].id)
+    } : {},
+    var.create_aws_gluefull ? {
+      glue_cli_full     = one(sdm_resource.awsgluefullcli[*].id)
+      glue_console_full = one(sdm_resource.awsglefullconsole[*].id)
+    } : {},
+  )
 }
 
-# One check per resource. A target that is still booting stays unhealthy until
-# it is checked again, so re-run with
-# terraform apply -replace='terraform_data.healthcheck["rs-..."]' or wait for
-# StrongDM's own scheduled check.
+# One check per resource, because the CLI rejects a name pattern that matches
+# more than one. A target that was still booting stays unhealthy until it is
+# checked again, so re-run a single check with
+# terraform apply -replace='terraform_data.healthcheck["postgresql"]'
 resource "terraform_data" "healthcheck" {
-  for_each = var.run_healthchecks == false ? toset([]) : toset(local.healthcheck_resource_ids)
+  for_each = var.run_healthchecks == false ? {} : local.healthcheck_resources
 
   input = each.value
 

@@ -27,6 +27,10 @@ module "windowstarget" {
   # Domain credentials for automated domain join
   domain_password = one(module.dc[*].domain_password)   # Password for domain admin account
   private_key_pem = (one(module.dc[*].private_key_pem)) # Key for decrypting admin password
+
+  # The instance joins the domain during boot, so do not start it until the
+  # domain controller reports ready.
+  depends_on = [terraform_data.dc_ready]
 }
 
 # Register the Windows target with password authentication in StrongDM

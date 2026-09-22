@@ -201,3 +201,9 @@ variable "run_healthchecks" {
   type        = bool
   default     = false
 }
+
+variable "dc_ready_timeout" {
+  description = "Seconds to wait for the domain controller to report ready before failing the Windows target"
+  type        = number
+  default     = 1800
+}

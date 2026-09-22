@@ -101,6 +101,7 @@ This is important if you're using the Windows CA target on versions under 2.0, a
 - `create_windows_target`: Create a Windows RDP target.
 - `create_aws_ro`: Create a role that can be assumed by the gateway to access AWS.
 - `create_demo_access`: Create example roles, Cedar policies, and approval workflows for the lab (see [Demo Access](#demo-access)).
+- `run_healthchecks`: Ask StrongDM to re-check every registered resource after deployment, so targets do not sit unhealthy until the next scheduled check. Requires the `sdm` CLI on PATH.
 
 ### General Configuration
 - `tagset`: Tags to apply to all resources.
@@ -108,6 +109,7 @@ This is important if you're using the Windows CA target on versions under 2.0, a
 - `secretkey`: Key for the tag used to filter secrets manager secrets.
 - `secretvalue`: Value for the tag used to filter secrets manager secrets.
 - `demo_approver_account_ids`: StrongDM account IDs added to the demo approver group.
+- `dc_ready_timeout`: Seconds to wait for the domain controller before failing the Windows target (default 1800).
 
 You can reference the [terraform.tfvars.example](main/terraform.tfvars.example) file in the main module for example configurations.
 
@@ -158,7 +160,14 @@ while `create_demo_access` is enabled.
 
 Setting up a domain controller takes several reboots. This is implemented by a persistent PowerShell script that runs at each reboot and has flow control through creating some "flag files" in C:\ with the "done" extension as each step is completed. You can reference the full PowerShell script [here](dc/install-dc.ps1.tpl).
 
-Note that you cannot deploy the "Windows target" until the domain controller is up and running.
+The Windows target has to join that domain, so it waits for the domain controller
+rather than racing it: `create_windows_target` gates the instance behind a check
+that polls the DC's StrongDM health until it passes (up to `dc_ready_timeout`
+seconds). The DC script only re-enables NLA at the end of its sequence, so that
+health check is a genuine readiness signal, and one `terraform apply` can deploy
+both. This needs the `sdm` CLI and `jq` on PATH; without them the wait fails fast
+and you can still deploy in two applies, the DC first and the Windows target
+afterwards.
 
 As per Microsoft [KB5014754](https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16) the SID must be added for users or Identity Aliases manually at this point.
 

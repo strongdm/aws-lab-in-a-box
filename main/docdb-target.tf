@@ -33,13 +33,16 @@ module "docdb-target" {
 # This creates a MongoDB-compatible resource in StrongDM for access control
 resource "sdm_resource" "docdb-target" {
   count = var.create_docdb == false ? 0 : 1
-  document_db_replica_set {
+  # document_db_host dials the cluster endpoint directly. The replica set type
+  # this replaces relied on member discovery, which reported "no hosts found"
+  # against a DocumentDB cluster endpoint and left the target unhealthy.
+  document_db_host {
     name          = "${var.name}-docdb-target"                 # Resource name in StrongDM
     hostname      = one(module.docdb-target[*].docdb_endpoint) # Cluster endpoint address
+    port          = one(module.docdb-target[*].docdb_port)     # DocumentDB listens on 27017
     username      = one(module.docdb-target[*].docdb_username) # Admin username
     password      = one(module.docdb-target[*].docdb_password) # Admin password
     auth_database = "admin"                                    # Default authentication database
-    # 	replica_set   = "rs0"                                      # Default replica set name
     tags = merge(one(module.docdb-target[*].thistagset), {
       sdm__cloud_id = one(module.docdb-target[*].cluster_id)
     })
