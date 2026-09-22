@@ -99,6 +99,7 @@ This is important if you're using the Windows CA target on versions under 2.0, a
 - `create_eks`: Create a Kubernetes cluster.
 - `create_domain_controller`: Create a Windows domain controller.
 - `create_windows_target`: Create a Windows RDP target.
+- `create_adcs`: Create a standalone ADCS/NDES server (see [ADCS/NDES Considerations](#adcsndes-considerations)).
 - `create_aws_ro`: Create a role that can be assumed by the gateway to access AWS.
 - `create_demo_access`: Create example roles, Cedar policies, and approval workflows for the lab (see [Demo Access](#demo-access)).
 - `run_healthchecks`: Ask StrongDM to re-check every registered resource after deployment, so targets do not sit unhealthy until the next scheduled check. Requires the `sdm` CLI on PATH.
@@ -170,6 +171,30 @@ and you can still deploy in two applies, the DC first and the Windows target
 afterwards.
 
 As per Microsoft [KB5014754](https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16) the SID must be added for users or Identity Aliases manually at this point.
+
+## ADCS/NDES Considerations
+
+Setting `create_adcs = true` deploys a standalone Windows server running Active
+Directory Certificate Services and NDES, joined to the existing domain controller.
+It requires `create_domain_controller = true`: the server joins that domain's
+Active Directory, and `terraform plan` fails with an explicit error if the domain
+controller is disabled. It joins the domain rather than racing it the same way the
+Windows target does, gated behind the same `dc_ready` check (also requiring the
+`sdm` CLI and `jq` on PATH), which now covers ADCS-only deployments as well as
+`create_windows_target`.
+
+The module derives the server's computer name as `<name>-adcs`, and Windows caps
+NetBIOS computer names at 15 characters, so `terraform plan` also fails explicitly
+when `var.name` is longer than 10 characters.
+
+Once deployed, the main module exposes two outputs: `ndes_url` (the NDES
+enrollment URL) and `adcs_fqdn` (the ADCS server's fully qualified domain name),
+both `null` while `create_adcs` is `false`.
+
+The ADCS host is deliberately not registered as a StrongDM resource yet, so it
+has no gateway/relay access path of its own: debugging it means RDP through the
+domain controller, decrypting `module.adcs`'s admin password with the DC's
+private key.
 
 ## Training Scenarios
 

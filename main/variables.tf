@@ -90,6 +90,12 @@ variable "create_linux_target" {
   default     = false
 }
 
+variable "create_adcs" {
+  description = "Flag to create a standalone ADCS/NDES server. Requires create_domain_controller = true"
+  type        = bool
+  default     = false
+}
+
 #---------- Metadata Configuration ----------#
 
 variable "tagset" {

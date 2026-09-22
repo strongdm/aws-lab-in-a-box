@@ -19,6 +19,11 @@ create_linux_target = true
 #Create a Windows target with Certificate Authentication
 #create_windows_target = true
 
+#Create a standalone ADCS/NDES server. Requires create_domain_controller = true,
+#and derives the computer name "<name>-adcs", so keep name to 10 characters or
+#fewer (Windows NetBIOS names top out at 15).
+#create_adcs = true
+
 #Create a PostgreSQL Database with its secret stored in AWS Secrets Manager
 #create_rds_postgresql = true
 
