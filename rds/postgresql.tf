@@ -19,7 +19,7 @@ resource "aws_db_instance" "rds_target" {
   identifier                  = lower("${var.name}-postgres-db")    # Unique identifier for the RDS instance
   allocated_storage           = 5                                   # 5GB storage allocation is sufficient for demos
   engine                      = "postgres"                          # Use PostgreSQL database engine
-  engine_version              = "16.11"                              # Use recent PostgreSQL version
+  engine_version              = "16.11"                             # Use recent PostgreSQL version
   manage_master_user_password = true                                # AWS will generate and manage the master password in Secrets Manager
   multi_az                    = false                               # Single AZ deployment for lab/demo (use true for production)
   username                    = "dba"                               # Master username for database administration
@@ -33,7 +33,7 @@ resource "aws_db_instance" "rds_target" {
 # Create a database subnet group that spans multiple availability zones
 resource "aws_db_subnet_group" "rds_target" {
   name       = lower("${var.name}-rds-subnet-group") # Subnet group name with unique prefix
-  subnet_ids = var.subnet_id                  # List of subnet IDs from variables
+  subnet_ids = var.subnet_id                         # List of subnet IDs from variables
 
   tags = local.thistagset # Apply consistent tagging
 }

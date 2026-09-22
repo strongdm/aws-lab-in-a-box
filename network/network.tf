@@ -233,8 +233,8 @@ resource "aws_vpc_security_group_ingress_rule" "allow_hcvault" {
   from_port         = 8200
   ip_protocol       = "tcp"
   to_port           = 8200
-  
-  tags = merge (var.tagset, {
+
+  tags = merge(var.tagset, {
     network = "Private"
     Name    = "${var.name}-private-sg"
   })
@@ -385,14 +385,14 @@ resource "aws_vpc_security_group_ingress_rule" "allow_netbios_tcp" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "allow_ssl_tcp" {
-  count = (var.create_windows_target || var.create_domain_controller) && !var.create_eks ? 1 : 0
+  count             = (var.create_windows_target || var.create_domain_controller) && !var.create_eks ? 1 : 0
   security_group_id = aws_security_group.relay.id
   cidr_ipv4         = aws_vpc.main.cidr_block
   from_port         = 443
   ip_protocol       = "tcp"
   to_port           = 443
 
-  tags = merge (var.tagset, {
+  tags = merge(var.tagset, {
     network = "Private"
     Name    = "${var.name}-private-sg"
   })

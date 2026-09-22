@@ -32,9 +32,9 @@ variable "target_user" {
 }
 
 variable "vault_version" {
-    description = "Version of HashiCorp Vault to download"
-    type        = string
-    default     = "1.18.4"
+  description = "Version of HashiCorp Vault to download"
+  type        = string
+  default     = "1.18.4"
 }
 
 resource "random_password" "admin_password" {
@@ -48,12 +48,12 @@ resource "random_password" "admin_password" {
 
 locals {
   admin_password = random_password.admin_password.result
-  thistagset = merge (var.tagset, {
+  thistagset = merge(var.tagset, {
     network = "Private"
     class   = "sdminfra"
     Name    = "sdm-${var.name}-hashicorp-vault"
     }
-  )  
+  )
 }
 
 variable "ami" {

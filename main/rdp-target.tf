@@ -38,7 +38,7 @@ resource "sdm_resource" "windows-target" {
     username = one(module.windowstarget[*].windowstarget_username) # Admin username
     password = one(module.windowstarget[*].windowstarget_password) # Admin password
     port     = 3389                                                # Standard RDP port
-    tags     = merge(one(module.windowstarget[*].thistagset), {
+    tags = merge(one(module.windowstarget[*].thistagset), {
       sdm__cloud_id = one(module.windowstarget[*].instance_id)
     })
   }
@@ -52,7 +52,7 @@ resource "sdm_resource" "windows-target-rdp" {
     hostname = one(module.windowstarget[*].windowstarget_fqdn) # Private DNS name of target
     username = "${var.name}\\Administrator"                    # Domain admin username with domain prefix
     port     = 3389                                            # Standard RDP port
-    tags     = merge(one(module.windowstarget[*].thistagset), {
+    tags = merge(one(module.windowstarget[*].thistagset), {
       sdm__cloud_id = one(module.windowstarget[*].instance_id)
     })
   }

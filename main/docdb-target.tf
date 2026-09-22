@@ -39,8 +39,8 @@ resource "sdm_resource" "docdb-target" {
     username      = one(module.docdb-target[*].docdb_username) # Admin username
     password      = one(module.docdb-target[*].docdb_password) # Admin password
     auth_database = "admin"                                    # Default authentication database
-# 	replica_set   = "rs0"                                      # Default replica set name
-    tags          = merge(one(module.docdb-target[*].thistagset), {
+    # 	replica_set   = "rs0"                                      # Default replica set name
+    tags = merge(one(module.docdb-target[*].thistagset), {
       sdm__cloud_id = one(module.docdb-target[*].cluster_id)
     })
   }
