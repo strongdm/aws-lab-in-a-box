@@ -26,8 +26,17 @@ Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 Install-Module -Name AWS.Tools.Common -Force -AllowClobber
 Write-Host "AWS PowerShell Tools installed successfully"
 
+# Point DNS at the domain controller. The adapter is discovered rather than
+# assumed: this previously hardcoded -InterfaceAlias "Ethernet", which matches
+# no adapter on this AMI, so DNS was never set, the domain never resolved, and
+# the join below failed. The ADCS module already discovers it this way.
 "Changing DNS"
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses @("${dc_ip}")
+$adapter = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1
+if ($null -eq $adapter) {
+    throw "No network adapter is Up; cannot point DNS at the domain controller"
+}
+Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses @("${dc_ip}")
+Write-Host "DNS on adapter '$($adapter.Name)' (index $($adapter.ifIndex)) set to ${dc_ip}"
 
 # Get the AWS-assigned hostname (e.g., ip-10-0-0-123)
 "Getting AWS-assigned hostname from instance metadata"
@@ -49,9 +58,42 @@ $securePassword = ConvertTo-SecureString -String $domainPassword -AsPlainText -F
 # Create a PSCredential object
 $credential = New-Object System.Management.Automation.PSCredential ($domainUser, $securePassword)
 
-# Rename computer and join the domain in a single operation (only one reboot required)
-Add-Computer -DomainName $domain -NewName $newComputerName -Credential $credential -Restart -Force
+# Wait for the domain to resolve before attempting the join. DNS was only just
+# repointed, and a join against an unresolvable domain fails immediately.
+$resolved = $false
+foreach ($attempt in 1..10) {
+    try {
+        Resolve-DnsName -Name $domain -Type A -ErrorAction Stop | Out-Null
+        $resolved = $true
+        Write-Host "Domain $domain resolved on attempt $attempt"
+        break
+    } catch {
+        Write-Host "Domain $domain not resolvable yet (attempt $attempt): $_"
+        Start-Sleep -Seconds 15
+    }
+}
+if (-not $resolved) {
+    throw "Domain $domain never resolved; not attempting to join"
+}
 
-# Output result
-Write-Host "Computer will be renamed to $newComputerName and joined to the domain. Restarting now."
+# Rename the computer and join the domain in one operation, so only one reboot
+# is needed. -ErrorAction Stop matters: without it a failed join was not fatal,
+# the instance rebooted anyway, and nothing recorded that it had never joined.
+foreach ($attempt in 1..5) {
+    try {
+        Add-Computer -DomainName $domain -NewName $newComputerName -Credential $credential -Force -ErrorAction Stop
+        Write-Host "Joined $domain as $newComputerName on attempt $attempt"
+        "Joined $domain as $newComputerName at $(Get-Date -Format o)" | Out-File "C:\domainjoin.done"
+        break
+    } catch {
+        Write-Host "Domain join attempt $attempt failed: $_"
+        if ($attempt -eq 5) {
+            throw "Domain join failed after 5 attempts: $_"
+        }
+        Start-Sleep -Seconds 30
+    }
+}
+
+Write-Host "Computer renamed to $newComputerName and joined to the domain. Restarting now."
+Restart-Computer -Force
 </powershell>
