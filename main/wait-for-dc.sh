@@ -1,49 +1,55 @@
 #!/usr/bin/env bash
 #
-# Waits until StrongDM reports the domain controller as reachable.
+# Waits until the domain controller's install script reports itself finished.
 #
-# The DC installs AD, DNS and ADCS through a PowerShell sequence with several
-# reboots, and only re-enables NLA at the very end. Its StrongDM health check
-# therefore fails until the domain is genuinely ready, which makes it a usable
-# readiness signal for the Windows target that has to join that domain.
+# The script publishes a completion marker to Parameter Store as its last act,
+# after promoting the domain, creating the service accounts, installing ADCS and
+# linking the GPO that disables NLA. Anything that joins the domain or reads
+# those accounts must wait for that marker.
 #
-# Usage: wait-for-dc.sh <resource-id> [timeout-seconds]
+# This deliberately does NOT use the DC's StrongDM health check. That check
+# passes within about two minutes of launch, because the base Windows AMI
+# answers RDP with NLA enabled from first boot - long before the domain exists.
+# Gating on it released the Windows target roughly fifteen minutes early, so it
+# attempted its domain join against a server that was still promoting, and it
+# missed the NLA group policy entirely because that policy had not been created
+# yet.
 #
-# Requires the sdm CLI and jq on PATH. The CLI authenticates with the same
-# SDM_API_ACCESS_KEY and SDM_API_SECRET_KEY the Terraform provider uses.
+# Usage: wait-for-dc.sh <parameter-name> <region> [timeout-seconds]
+#
+# Requires the AWS CLI and credentials that can read the parameter - the same
+# credentials Terraform is already using.
 
 set -uo pipefail
 
-resource_id="${1:?resource id required}"
-timeout_seconds="${2:-1800}"
+parameter_name="${1:?parameter name required}"
+region="${2:?region required}"
+timeout_seconds="${3:-2400}"
 interval_seconds=30
 
-for cmd in sdm jq; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "wait-for-dc: $cmd is not on PATH" >&2
-    exit 1
-  fi
-done
+if ! command -v aws >/dev/null 2>&1; then
+  echo "wait-for-dc: the aws CLI is not on PATH" >&2
+  exit 1
+fi
 
 deadline=$(($(date +%s) + timeout_seconds))
 
 while :; do
-  # Ask for a fresh check rather than trusting the last scheduled one, which
-  # was probably recorded while the DC was still installing.
-  sdm admin resources healthcheck "$resource_id" >/dev/null 2>&1
-
-  if sdm admin healthchecks list --json --filter "resourceID:${resource_id}" 2>/dev/null |
-    jq -e 'any(.[]; .healthy)' >/dev/null 2>&1; then
-    echo "wait-for-dc: domain controller ${resource_id} is reachable"
+  if completed_at=$(aws ssm get-parameter \
+    --name "$parameter_name" \
+    --region "$region" \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null) && [ -n "$completed_at" ] && [ "$completed_at" != "None" ]; then
+    echo "wait-for-dc: domain controller finished provisioning at ${completed_at}"
     exit 0
   fi
 
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "wait-for-dc: gave up after ${timeout_seconds}s waiting for ${resource_id}" >&2
-    echo "wait-for-dc: check progress with 'sdm admin healthchecks list --filter resourceID:${resource_id}'" >&2
+    echo "wait-for-dc: gave up after ${timeout_seconds}s waiting for ${parameter_name}" >&2
+    echo "wait-for-dc: check C:\\*.done flag files on the domain controller, or its bootstrap log, to see how far the script got" >&2
     exit 1
   fi
 
-  echo "wait-for-dc: not ready yet, retrying in ${interval_seconds}s"
+  echo "wait-for-dc: domain controller still provisioning, checking again in ${interval_seconds}s"
   sleep "$interval_seconds"
 done

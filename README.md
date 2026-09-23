@@ -163,14 +163,19 @@ while `create_lab_access` is enabled.
 
 Setting up a domain controller takes several reboots. This is implemented by a persistent PowerShell script that runs at each reboot and has flow control through creating some "flag files" in C:\ with the "done" extension as each step is completed. You can reference the full PowerShell script [here](dc/install-dc.ps1.tpl).
 
-The Windows target has to join that domain, so it waits for the domain controller
-rather than racing it: `create_windows_target` gates the instance behind a check
-that polls the DC's StrongDM health until it passes (up to `dc_ready_timeout`
-seconds). The DC script only re-enables NLA at the end of its sequence, so that
-health check is a genuine readiness signal, and one `terraform apply` can deploy
-both. This needs the `sdm` CLI and `jq` on PATH; without them the wait fails fast
-and you can still deploy in two applies, the DC first and the Windows target
-afterwards.
+Anything that joins the domain waits for the domain controller rather than racing
+it. The install script publishes a completion marker to Parameter Store as its
+last act, and `terraform_data.dc_ready` blocks on that marker before the Windows
+target, the ADCS server or the AD secret engine is created, for up to
+`dc_ready_timeout` seconds. One `terraform apply` therefore deploys the whole
+lab. This needs the AWS CLI and the credentials Terraform is already using.
+
+An earlier version of this gate polled the DC's StrongDM health check instead.
+That was wrong: the base Windows AMI answers RDP with NLA enabled from first
+boot, so the check passed about two minutes after launch, roughly fifteen
+minutes before the domain existed. The Windows target was released early, tried
+to join a server that was still promoting, and never received the NLA group
+policy because the DC had not created it yet.
 
 As per Microsoft [KB5014754](https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16) the SID must be added for users or Identity Aliases manually at this point.
 

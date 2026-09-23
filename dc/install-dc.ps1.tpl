@@ -344,6 +344,27 @@ if (((-not (Test-Path "C:\sdm.done")) -and (Test-Path "C:\adcs.done"))) {
         # Force the GPO update on all machines in the domain (optional, can be run later)
         Invoke-GPUpdate -Force
         Write-Host "Group Policy update has been triggered."
+        # Publish completion to Parameter Store. This is what Terraform gates
+        # dependents on: the base AMI answers RDP with NLA from first boot, so a
+        # health check passes minutes before any of this exists, which let the
+        # Windows target attempt its domain join before the domain was promoted.
+        # The SID is published here too - strong certificate mapping needs it,
+        # and previously only the Packer-AMI script wrote it.
+        try {
+            $domainAdminSid = (Get-ADUser -Identity "domainadmin" -ErrorAction Stop).SID.Value
+            Write-SSMParameter -Name "/${name}/dc/domain-admin-sid" -Value $domainAdminSid -Type "String" -Overwrite $true
+            Write-Host "Domain Administrator SID published to Parameter Store."
+        } catch {
+            Write-Host "WARNING: could not publish the Domain Administrator SID: $_"
+        }
+
+        try {
+            Write-SSMParameter -Name "/${name}/dc/provisioning-complete" -Value (Get-Date -Format "o") -Type "String" -Overwrite $true
+            Write-Host "DC provisioning marked complete in Parameter Store."
+        } catch {
+            Write-Host "WARNING: could not publish the completion marker: $_"
+        }
+
         "Certificates and GPOs updated" | Out-File "C:\sdm.done"
     }
 }

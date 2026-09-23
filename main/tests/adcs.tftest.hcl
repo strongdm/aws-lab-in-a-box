@@ -744,3 +744,91 @@ run "adcs_credentials_node_defaults_to_relay" {
     error_message = "adcs_credentials_node must default to the relay: the gateway cannot reach the private-subnet ADCS server"
   }
 }
+
+# The gate must exist for every dependent, not just the Windows target. The AD
+# secret engine binds as an account the DC install script creates, so creating
+# it early failed with "no nodes reachable for secret store".
+run "dc_gate_covers_the_secret_engine" {
+  command = plan
+
+  variables {
+    create_domain_controller = true
+    create_windows_target    = false
+    create_adcs              = false
+    create_managedsecrets    = true
+    domain_users             = null
+  }
+
+  # Same reason as the runs above: data.sdm_rdp_ca_pubkey.public_key is
+  # schema-optional-not-computed, so mock_provider leaves it null and
+  # dc/dc.tf's base64encode() errors. Overriding the module sidesteps it.
+  override_module {
+    target = module.dc[0]
+    outputs = {
+      key_name                            = "probe-key"
+      dc_ip                               = "10.0.1.10"
+      dc_fqdn                             = "dc1.probe.local"
+      dc_username                         = "administrator"
+      dc_password                         = "sentinel-dc-pw"
+      domain_admin                        = "domainadmin"
+      domain_password                     = "sentinel-domain-pw!"
+      svc_ndes_password                   = "sentinel-ndes-pw"
+      svc_relay_username                  = "svc-sdm-relay"
+      svc_relay_password                  = "sentinel-relay-pw"
+      svc_rotation_username               = "svc-pwd-rotation"
+      svc_rotation_password               = "sentinel-rotation-pw"
+      thistagset                          = { environment = "test" }
+      private_key_pem                     = "sentinel-private-key"
+      instance_id                         = "i-0123456789abcdef0"
+      ssm_provisioning_complete_parameter = "/probe/dc/provisioning-complete"
+    }
+  }
+
+  assert {
+    condition     = length(terraform_data.dc_ready) == 1
+    error_message = "dc_ready must gate the AD secret engine, whose bind account the DC script creates"
+  }
+}
+
+# A domain controller with nothing depending on it needs no gate.
+run "dc_gate_absent_without_dependents" {
+  command = plan
+
+  variables {
+    create_domain_controller = true
+    create_windows_target    = false
+    create_adcs              = false
+    create_managedsecrets    = false
+    domain_users             = null
+  }
+
+  # Same reason as the runs above: data.sdm_rdp_ca_pubkey.public_key is
+  # schema-optional-not-computed, so mock_provider leaves it null and
+  # dc/dc.tf's base64encode() errors. Overriding the module sidesteps it.
+  override_module {
+    target = module.dc[0]
+    outputs = {
+      key_name                            = "probe-key"
+      dc_ip                               = "10.0.1.10"
+      dc_fqdn                             = "dc1.probe.local"
+      dc_username                         = "administrator"
+      dc_password                         = "sentinel-dc-pw"
+      domain_admin                        = "domainadmin"
+      domain_password                     = "sentinel-domain-pw!"
+      svc_ndes_password                   = "sentinel-ndes-pw"
+      svc_relay_username                  = "svc-sdm-relay"
+      svc_relay_password                  = "sentinel-relay-pw"
+      svc_rotation_username               = "svc-pwd-rotation"
+      svc_rotation_password               = "sentinel-rotation-pw"
+      thistagset                          = { environment = "test" }
+      private_key_pem                     = "sentinel-private-key"
+      instance_id                         = "i-0123456789abcdef0"
+      ssm_provisioning_complete_parameter = "/probe/dc/provisioning-complete"
+    }
+  }
+
+  assert {
+    condition     = length(terraform_data.dc_ready) == 0
+    error_message = "dc_ready should not be created when nothing depends on the domain"
+  }
+}

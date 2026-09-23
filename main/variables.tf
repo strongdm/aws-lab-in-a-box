@@ -220,7 +220,7 @@ variable "run_healthchecks" {
 }
 
 variable "dc_ready_timeout" {
-  description = "Seconds to wait for the domain controller to report ready before failing the Windows target"
+  description = "Seconds to wait for the domain controller's install script to publish its completion marker. A vanilla AMI takes appreciably longer than a Packer-built one"
   type        = number
-  default     = 1800
+  default     = 2400
 }

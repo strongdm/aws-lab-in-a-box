@@ -31,6 +31,12 @@ module "secretsmgmt" {
 # Create an Active Directory secret engine for automated credential management
 resource "sdm_secret_engine" "ad" {
   count = (var.create_domain_controller && (var.create_managedsecrets || try(var.domain_users, null) != null)) ? 1 : 0 # Only create when DC exists and secrets are needed
+
+  # The bind account below is created by the DC install script, and StrongDM
+  # needs an online node to reach the secret store. Creating this before the DC
+  # finished failed outright with "no nodes reachable for secret store".
+  depends_on = [terraform_data.dc_ready]
+
   active_directory {
     binddn                 = "CN=Password Rotation Service,CN=Users,DC=${var.name},DC=local" # Scoped rotation account for LDAP password operations (Reset Password only on CN=Users)
     bindpass               = one(module.dc[*].svc_rotation_password)                         # Service account password from DC module

@@ -80,6 +80,11 @@ output "ssm_computer_name_parameter" {
   value       = "/${var.name}/dc/computer-name"
 }
 
+output "ssm_provisioning_complete_parameter" {
+  description = "Parameter Store path written when the DC install script finishes, used to gate dependents"
+  value       = "/${var.name}/dc/provisioning-complete"
+}
+
 output "ssm_domain_admin_sid_parameter" {
   description = "AWS Systems Manager Parameter Store path containing the Domain Administrator SID"
   value       = "/${var.name}/dc/domain-admin-sid"

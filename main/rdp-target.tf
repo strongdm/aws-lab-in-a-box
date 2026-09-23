@@ -37,11 +37,17 @@ module "windowstarget" {
 resource "sdm_resource" "windows-target" {
   count = var.create_windows_target == false ? 0 : 1
   rdp {
-    name     = "${var.name}-windows-password"                      # Resource name in StrongDM
-    hostname = one(module.windowstarget[*].windowstarget_fqdn)     # Private DNS name of target
-    username = one(module.windowstarget[*].windowstarget_username) # Admin username
-    password = one(module.windowstarget[*].windowstarget_password) # Admin password
-    port     = 3389                                                # Standard RDP port
+    name     = "${var.name}-windows-password"                  # Resource name in StrongDM
+    hostname = one(module.windowstarget[*].windowstarget_fqdn) # Private DNS name of target
+    # domainadmin, not the instance's local administrator: the local password
+    # comes from password_data, which is only the password EC2 set at first
+    # boot. Any later reboot re-randomises it, AWS cannot return the new value,
+    # and the stored credential is then rejected with STATUS_LOGON_FAILURE -
+    # observed live on 2026-09-23 after a reboot. A domain account does not
+    # depend on the instance's local password at all.
+    username = "${var.name}\\${one(module.dc[*].domain_admin)}" # Domain admin, NetBIOS-qualified
+    password = one(module.dc[*].domain_password)                # Domain admin password
+    port     = 3389                                             # Standard RDP port
     tags = merge(one(module.windowstarget[*].thistagset), {
       sdm__cloud_id = one(module.windowstarget[*].instance_id)
     })
