@@ -32,7 +32,7 @@ variables {
   create_aws_gluefull      = false
   create_managedsecrets    = false
   create_hcvault           = false
-  create_demo_access       = false
+  create_lab_access        = false
   create_adcs              = false
   run_healthchecks         = false
 }
