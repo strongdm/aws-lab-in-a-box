@@ -193,10 +193,14 @@ Once deployed, the main module exposes two outputs: `ndes_url` (the NDES
 enrollment URL) and `adcs_fqdn` (the ADCS server's fully qualified domain name),
 both `null` while `create_adcs` is `false`.
 
-The ADCS host is deliberately not registered as a StrongDM resource yet, so it
-has no gateway/relay access path of its own: debugging it means RDP through the
-domain controller, decrypting `module.adcs`'s admin password with the DC's
-private key.
+The ADCS host is also registered as its own StrongDM RDP resource,
+`<name>-adcs-ndes`, covered by the `<name>-Windows-Admin` role when
+`create_lab_access = true`, so it has an access path independent of
+RDP-hopping through the domain controller. It is registered while the
+multi-reboot ADCS install may still be running, so it can sit unhealthy
+until the next health check catches up; re-check it directly
+with `terraform apply -replace='terraform_data.healthcheck["adcs"]' (with `run_healthchecks = true`; the
+address does not exist otherwise)`.
 
 The module stages its PowerShell installers as S3 objects, and those renders
 embed the domain administrator password and both service account passwords in

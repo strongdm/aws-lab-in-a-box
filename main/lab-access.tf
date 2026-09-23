@@ -95,20 +95,35 @@ resource "sdm_role" "windows_admin" {
   count = var.create_lab_access == false ? 0 : 1
   name  = "${var.name}-Windows-Admin"
 
-  access_rules = jsonencode([
-    {
-      tags = {
-        class = "target"
-        Name  = "sdm-${var.name}-windows-target"
+  # The windows-target and domain-controller rules are unconditional, like the
+  # rest of this file's rules: names of targets that were not deployed simply
+  # match nothing. The ADCS rule is gated on var.create_adcs instead, so that
+  # flag's plan shows no change to this role while it is off - it would
+  # otherwise gain a rule with no matching resource on every plan.
+  access_rules = jsonencode(concat(
+    [
+      {
+        tags = {
+          class = "target"
+          Name  = "sdm-${var.name}-windows-target"
+        }
+      },
+      {
+        tags = {
+          class = "sdminfra"
+          Name  = "sdm-${var.name}-domain-controller"
+        }
       }
-    },
-    {
-      tags = {
-        class = "sdminfra"
-        Name  = "sdm-${var.name}-domain-controller"
+    ],
+    var.create_adcs ? [
+      {
+        tags = {
+          class = "adcs"
+          Name  = "sdm-${var.name}-adcs-ndes"
+        }
       }
-    }
-  ])
+    ] : []
+  ))
 }
 
 # Cloud Access - Access to the AWS CLI and console profiles (ReadOnly, S3, Glue)

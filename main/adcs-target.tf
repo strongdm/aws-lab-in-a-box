@@ -3,16 +3,17 @@
 #
 # This file creates a standalone Windows ADCS + NDES server and joins it
 # to the domain controller's Active Directory. It is a parallel
-# certificate model to the StrongDM RDP CA path (see dc-target.tf), not
-# a replacement: the ADCS host is deliberately not registered as a
-# StrongDM resource yet, so debugging it means RDP through the domain
-# controller.
+# certificate model to the StrongDM RDP CA path (see dc-target.tf), not a
+# replacement for it. The ADCS host is registered as its own StrongDM RDP
+# resource, so it has an access path independent of RDP-hopping through the
+# domain controller.
 #
 # Components:
 # - A guard that fails the plan with an explicit message when the
 #   domain controller is disabled, instead of passing null credentials
 #   into the module
 # - Windows Server EC2 instance running ADCS/NDES, joined to the domain
+# - StrongDM resource registration for administrative RDP access
 #--------------------------------------------------------------
 
 # ADCS joins the existing domain controller's Active Directory and derives
@@ -46,6 +47,10 @@ module "adcs" {
   subnet_id = coalesce(var.relay_subnet, one(module.network[*].relay_subnet)) # Private subnet
   sg        = coalesce(var.public_sg, module.network[0].private_sg)           # Security group
 
+  # The ADCS instance reuses the DC's key pair (key_name above), so the DC's
+  # private key also decrypts the ADCS instance's initial admin password.
+  private_key_pem = one(module.dc[*].private_key_pem)
+
   # Domain integration; domain_name takes var.name, since the DC module
   # builds dc=<name>,dc=local
   domain_name = var.name
@@ -63,6 +68,30 @@ module "adcs" {
   # failed precondition skips this module instead of evaluating it with
   # null credentials.
   depends_on = [terraform_data.dc_ready, terraform_data.adcs_requires_dc]
+}
+
+# Register the ADCS/NDES host as an RDP resource in StrongDM for
+# administrative access, mirroring sdm_resource.dc. Registered while the
+# multi-reboot ADCS install may still be running, so it can show unhealthy
+# until the next health check catches up - see healthchecks.tf.
+resource "sdm_resource" "adcs" {
+  count = var.create_adcs == false ? 0 : 1
+  rdp {
+    name = "${var.name}-adcs-ndes" # Resource name in StrongDM
+
+    # The AWS-assigned private DNS name, matching sdm_resource.dc and
+    # sdm_resource.windows-target. NOT module.adcs's adcs_fqdn: the network
+    # module sets no aws_vpc_dhcp_options, so the relay resolves via
+    # AmazonProvidedDNS and cannot resolve the AD name.
+    hostname = one(module.adcs[*].adcs_hostname)
+    username = one(module.adcs[*].admin_username) # Local administrator username
+    password = one(module.adcs[*].admin_password) # Decrypted local administrator password
+
+    port = 3389 # Standard RDP port
+    tags = merge(one(module.adcs[*].tagset), {
+      sdm__cloud_id = one(module.adcs[*].adcs_instance_id)
+    })
+  }
 }
 
 # ADCS/NDES enrollment credentials for whichever StrongDM node carries them

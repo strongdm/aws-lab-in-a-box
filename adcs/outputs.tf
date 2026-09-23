@@ -72,7 +72,7 @@ output "admin_username" {
 }
 
 output "admin_password" {
-  description = "Encrypted password data for the local administrator account (requires private key to decrypt)"
-  value       = aws_instance.adcs.password_data
+  description = "Decrypted password for the local administrator account, or null when private_key_pem was not provided"
+  value       = var.private_key_pem == null ? null : rsadecrypt(aws_instance.adcs.password_data, var.private_key_pem)
   sensitive   = true
 }

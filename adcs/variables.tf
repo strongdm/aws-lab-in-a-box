@@ -110,6 +110,13 @@ variable "svc_relay_password" {
   default     = null
 }
 
+variable "private_key_pem" {
+  description = "Key to decrypt the initial admin password, as provided by the DC module"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
 # Local variables for module operation
 locals {
   # CA common name defaults to "<Name>-SubCA"

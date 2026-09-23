@@ -29,6 +29,7 @@ locals {
     var.create_docdb ? { documentdb = one(sdm_resource.docdb-target[*].id) } : {},
     var.create_eks ? { eks = one(sdm_resource.eks[*].id) } : {},
     var.create_domain_controller ? { domain_controller = one(sdm_resource.dc[*].id) } : {},
+    var.create_adcs ? { adcs = one(sdm_resource.adcs[*].id) } : {},
     var.create_windows_target ? {
       windows_target = one(sdm_resource.windows-target[*].id)
       windows_rdp    = one(sdm_resource.windows-target-rdp[*].id)
