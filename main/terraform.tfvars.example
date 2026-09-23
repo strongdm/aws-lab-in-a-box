@@ -24,6 +24,12 @@ create_linux_target = true
 #fewer (Windows NetBIOS names top out at 15).
 #create_adcs = true
 
+#Which StrongDM node carries the ADCS/NDES enrollment credentials: "relay"
+#(default) or "gateway". Leave at "relay" in this lab's default topology -
+#the DC, Windows target and ADCS server sit in private subnets only the
+#relay can reach.
+#adcs_credentials_node = "relay"
+
 #Create a PostgreSQL Database with its secret stored in AWS Secrets Manager
 #create_rds_postgresql = true
 

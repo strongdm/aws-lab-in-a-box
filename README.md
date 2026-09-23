@@ -100,6 +100,7 @@ This is important if you're using the Windows CA target on versions under 2.0, a
 - `create_domain_controller`: Create a Windows domain controller.
 - `create_windows_target`: Create a Windows RDP target.
 - `create_adcs`: Create a standalone ADCS/NDES server (see [ADCS/NDES Considerations](#adcsndes-considerations)).
+- `adcs_credentials_node`: Which node (`"relay"` or `"gateway"`) carries the ADCS/NDES enrollment credentials (see [ADCS/NDES Enrollment Credentials](#adcsndes-enrollment-credentials-on-the-relaygateway)).
 - `create_aws_ro`: Create a role that can be assumed by the gateway to access AWS.
 - `create_lab_access`: Create worked examples of roles, Cedar policies and approval workflows for the lab (see [Lab Access](#lab-access)).
 - `run_healthchecks`: Ask StrongDM to re-check every registered resource after deployment, so targets do not sit unhealthy until the next scheduled check. Requires the `sdm` CLI on PATH.
@@ -196,6 +197,43 @@ The ADCS host is deliberately not registered as a StrongDM resource yet, so it
 has no gateway/relay access path of its own: debugging it means RDP through the
 domain controller, decrypting `module.adcs`'s admin password with the DC's
 private key.
+
+The module stages its PowerShell installers as S3 objects, and those renders
+embed the domain administrator password and both service account passwords in
+plaintext. Those values therefore live in the object bodies and in Terraform
+state. This is an accepted property of an evaluation lab rather than an
+oversight: public access to the bucket is blocked and the ADCS instance role is
+least-privileged, but any principal in the account holding `s3:GetObject` on
+that bucket can read them, and anyone with the state file can read them too.
+Treat a deployed lab's AWS account and state file as holding domain credentials,
+and destroy the lab when the evaluation finishes.
+
+### ADCS/NDES Enrollment Credentials on the Relay/Gateway
+
+With `create_adcs = true`, the scoped `svc-sdm-relay` service account's
+credentials are appended to `/etc/sysconfig/sdm-proxy` on one StrongDM node as
+`SDM_ADCS_USER`/`SDM_ADCS_PW`, and that node's `sdm-proxy` service is restarted
+to pick them up, so StrongDM can request certificates from the lab's own CA.
+`adcs_credentials_node` selects which node: `"relay"` (the default) or
+`"gateway"`. Leave it at `"relay"` in this lab's default topology - the DC,
+Windows target and ADCS server sit in private subnets that only the relay can
+reach. The `"gateway"` setting exists to mirror a customer topology where the
+gateway itself reaches NDES; set here, it will not enroll certificates in this
+lab's own network. This is wiring only: it does not configure the
+`sdm_secret_store` Active Directory CA object that carries the NDES host
+setting, which is a separate follow-on task.
+
+Flipping `create_adcs` on an already-deployed lab changes the chosen node's
+`user_data`, and both instances set `user_data_replace_on_change = true`, so
+Terraform replaces that EC2 instance. It then boots with an already-consumed
+StrongDM token and never registers. Taint the matching SDM node alongside the
+instance before applying:
+
+```bash
+terraform taint 'sdm_node.relay'      # or 'sdm_node.gateway' if adcs_credentials_node = "gateway"
+terraform taint 'aws_instance.relay'  # or 'aws_instance.gateway'
+terraform apply
+```
 
 ## Training Scenarios
 

@@ -99,7 +99,7 @@ output "svc_relay_username" {
 }
 
 output "svc_relay_password" {
-  description = "Password for the svc-sdm-relay service account (SDM_ADCS_USER)"
+  description = "Password for the svc-sdm-relay service account (SDM_ADCS_PW)"
   value       = random_password.svc_relay_password.result
   sensitive   = true
 }

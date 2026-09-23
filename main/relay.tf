@@ -32,6 +32,24 @@ resource "sdm_node" "relay" {
 }
 
 # Launch the EC2 instance that will run the StrongDM relay
+# Hoisted out of the resource so the test suite can render the template from
+# the real call-site values. Every entry here is exactly what the instance
+# receives; the token is the only unknown at plan time, so the suite merges a
+# placeholder over it and asserts on the result.
+locals {
+  relay_provision_vars = {
+    sdm_relay_token = sdm_node.relay.relay[0].token # Token for relay registration
+    target_user     = "ubuntu"                      # User to run the relay service
+    sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
+    create_hcvault  = var.create_hcvault
+    vault_url       = var.create_hcvault ? one(module.hcvault[*].vault_url) : ""
+    aws_region      = data.aws_region.current.region
+    vault_version   = var.create_hcvault ? var.vault_version : ""
+    adcs_user       = local.adcs_relay_user
+    adcs_password   = local.adcs_relay_password
+  }
+}
+
 resource "aws_instance" "relay" {
   ami                         = data.aws_ami.ubuntu.id      # Ubuntu AMI defined in amis.tf
   instance_type               = "t3.micro"                  # Small instance suitable for relay functions
@@ -42,15 +60,7 @@ resource "aws_instance" "relay" {
   iam_instance_profile = aws_iam_instance_profile.gw_instance_profile.name
 
   # Bootstrap the relay using the same provisioning template as gateway
-  user_data = templatefile("${path.module}/gw-provision.tpl", {
-    sdm_relay_token = sdm_node.relay.relay[0].token # Token for relay registration
-    target_user     = "ubuntu"                      # User to run the relay service
-    sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
-    create_hcvault  = var.create_hcvault
-    vault_url       = var.create_hcvault ? one(module.hcvault[*].vault_url) : ""
-    aws_region      = data.aws_region.current.region
-    vault_version   = var.create_hcvault ? var.vault_version : ""
-  })
+  user_data = templatefile("${path.module}/gw-provision.tpl", local.relay_provision_vars)
 
   # Use a dedicated network interface in the private subnet
   network_interface {

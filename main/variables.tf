@@ -96,6 +96,17 @@ variable "create_adcs" {
   default     = false
 }
 
+variable "adcs_credentials_node" {
+  description = "Which StrongDM node carries the ADCS/NDES enrollment credentials (SDM_ADCS_USER/SDM_ADCS_PW): \"relay\" or \"gateway\". Defaults to the relay, since the DC, Windows target and ADCS server all sit in private subnets that only the relay can reach in this lab's default topology; \"gateway\" mirrors a customer topology where the gateway itself reaches NDES and will not enroll certificates in this lab's own network."
+  type        = string
+  default     = "relay"
+
+  validation {
+    condition     = contains(["relay", "gateway"], var.adcs_credentials_node)
+    error_message = "adcs_credentials_node must be either \"relay\" or \"gateway\"."
+  }
+}
+
 #---------- Metadata Configuration ----------#
 
 variable "tagset" {

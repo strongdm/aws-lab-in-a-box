@@ -159,6 +159,22 @@ resource "aws_key_pair" "gateway" {
 }
 
 # Launch the EC2 instance that will run the StrongDM gateway
+# Hoisted for the same reason as local.relay_provision_vars: the suite renders
+# the template from these real call-site values rather than a hand-built copy.
+locals {
+  gateway_provision_vars = {
+    sdm_relay_token = sdm_node.gateway.gateway[0].token # Token for gateway registration
+    target_user     = "ubuntu"                          # User to run the gateway service
+    sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
+    create_hcvault  = "false" # The gateway never needs to know about Vault
+    vault_version   = ""
+    vault_url       = ""
+    aws_region      = data.aws_region.current.region
+    adcs_user       = local.adcs_gateway_user
+    adcs_password   = local.adcs_gateway_password
+  }
+}
+
 resource "aws_instance" "gateway" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t3.micro"
@@ -169,16 +185,7 @@ resource "aws_instance" "gateway" {
   key_name                    = aws_key_pair.gateway.key_name
 
   # Bootstrap the gateway using the provisioning template
-  user_data = templatefile("${path.module}/gw-provision.tpl", {
-    sdm_relay_token = sdm_node.gateway.gateway[0].token # Token for gateway registration
-    target_user     = "ubuntu"                          # User to run the gateway service
-    sdm_domain      = data.env_var.sdm_api.value == "" ? "" : coalesce(join(".", slice(split(".", element(split(":", data.env_var.sdm_api.value), 0)), 1, length(split(".", element(split(":", data.env_var.sdm_api.value), 0))))), "")
-    create_hcvault  = "false" # The gateway never needs to know about Vault
-    vault_version   = ""
-    vault_url       = ""
-    aws_region      = data.aws_region.current.region
-
-  })
+  user_data = templatefile("${path.module}/gw-provision.tpl", local.gateway_provision_vars)
 
   tags = merge(var.tagset, {
     network = "Public"

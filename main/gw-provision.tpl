@@ -104,4 +104,21 @@ sudo chmod +x /usr/local/bin/vault-auth.sh
 echo "*/29 * * * * root /usr/local/bin/vault-auth.sh" | sudo tee -a /etc/crontab
 
 echo "Vault authentication setup complete" | logger -t sdminstall
+%{ endif }%{ if adcs_user != "" }
+# Configure ADCS/NDES enrollment credentials for the StrongDM proxy
+echo "Configuring ADCS credentials for NDES access" | logger -t sdminstall
+
+sudo mkdir -p /etc/sysconfig
+
+# Redirect stdout to /dev/null: tee otherwise echoes the password into
+# cloud-init's captured output log, which is world-readable on Ubuntu.
+sudo tee -a /etc/sysconfig/sdm-proxy > /dev/null <<'ADCS_EOF'
+SDM_ADCS_USER=${adcs_user}
+SDM_ADCS_PW="${adcs_password}"
+ADCS_EOF
+sudo chmod 600 /etc/sysconfig/sdm-proxy
+
+sudo systemctl restart sdm-proxy
+
+echo "ADCS credentials configured successfully" | logger -t sdminstall
 %{ endif }

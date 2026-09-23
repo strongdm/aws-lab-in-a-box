@@ -64,3 +64,39 @@ module "adcs" {
   # null credentials.
   depends_on = [terraform_data.dc_ready, terraform_data.adcs_requires_dc]
 }
+
+# ADCS/NDES enrollment credentials for whichever StrongDM node carries them
+# (var.adcs_credentials_node). Sourced from module.dc, not module.adcs:
+# module.adcs depends on terraform_data.dc_ready, so referencing any of its
+# outputs from aws_instance.relay would order the relay behind a DC health
+# check that only the relay itself can service, deadlocking apply.
+# module.adcs's own sdm_adcs_user/sdm_adcs_password outputs are pure
+# pass-throughs of these same module.dc values, so nothing is lost by
+# reconstructing them here. Empty string (not null) when create_adcs is
+# false, so gw-provision.tpl always receives a defined value on both call
+# sites. Note that referencing module.dc here gives aws_instance.relay a graph
+# edge to that module whenever create_domain_controller is true, including with
+# create_adcs = false: Terraform builds edges from references, not from
+# evaluated conditionals. That only serialises the relay behind the DC
+# instance; it creates no cycle and changes no rendered user_data.
+locals {
+  # Guards against evaluating module.dc's outputs when create_domain_controller
+  # is false: module.dc is then an empty tuple, one(module.dc[*].x) is null,
+  # and a null spliced into the string template below errors outright rather
+  # than producing "". (adcs_requires_dc already fails the plan for this
+  # combination with its own message; this only stops that failure from being
+  # masked by an unrelated interpolation error.)
+  adcs_dc_present = var.create_adcs && length(module.dc) > 0
+
+  # lower() matches adcs/variables.tf's own domain_fqdn: the DC creates the
+  # UPN with var.name's original casing, but AD UPN lookup is case-insensitive,
+  # so folding to lowercase here is safe and keeps this in sync with adcs'
+  # domain_fqdn for a mixed-case var.name.
+  adcs_user     = local.adcs_dc_present ? "${one(module.dc[*].svc_relay_username)}@${lower(var.name)}.local" : ""
+  adcs_password = local.adcs_dc_present ? one(module.dc[*].svc_relay_password) : ""
+
+  adcs_relay_user       = var.adcs_credentials_node == "relay" ? local.adcs_user : ""
+  adcs_relay_password   = var.adcs_credentials_node == "relay" ? local.adcs_password : ""
+  adcs_gateway_user     = var.adcs_credentials_node == "gateway" ? local.adcs_user : ""
+  adcs_gateway_password = var.adcs_credentials_node == "gateway" ? local.adcs_password : ""
+}
