@@ -391,6 +391,19 @@ run "adcs_credentials_default_to_relay" {
     error_message = "the relay should carry SDM_ADCS_USER by default"
   }
 
+  # The DC resource must use domainadmin, not the built-in administrator:
+  # promotion removes the local account database, so the EC2-generated password
+  # dc_password returns is rejected and the first RDP attempt fails.
+  assert {
+    condition     = sdm_resource.dc[0].rdp[0].username == "probe\\domainadmin"
+    error_message = "sdm_resource.dc must authenticate as the NetBIOS-qualified domainadmin account"
+  }
+
+  assert {
+    condition     = sdm_resource.dc[0].rdp[0].password == "sentinel-domain-pw!"
+    error_message = "sdm_resource.dc must use module.dc's domain_password, not dc_password"
+  }
+
   assert {
     condition     = local.adcs_relay_password == "sentinel-relay-pw"
     error_message = "the relay should carry a non-empty SDM_ADCS_PW by default"

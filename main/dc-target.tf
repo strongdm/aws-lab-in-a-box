@@ -32,8 +32,13 @@ resource "sdm_resource" "dc" {
   rdp {
     name     = "${var.name}-domain-controller" # Resource name in StrongDM
     hostname = one(module.dc[*].dc_fqdn)       # Private DNS name of the domain controller
-    username = one(module.dc[*].dc_username)   # Local administrator username
-    password = one(module.dc[*].dc_password)   # Local administrator password
+    # domainadmin, not the built-in administrator: promoting the server to a
+    # domain controller removes the local account database, and the EC2-generated
+    # password dc_password returns is then rejected. domainadmin is created by the
+    # DC script, is a member of Domain Admins, and is the account the Windows
+    # target already authenticates with to join the domain.
+    username = "${var.name}\\${one(module.dc[*].domain_admin)}" # Domain admin, NetBIOS-qualified
+    password = one(module.dc[*].domain_password)                # Domain admin password
 
     port = 3389 # Standard RDP port
     tags = merge(one(module.dc[*].thistagset), {
